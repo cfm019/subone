@@ -1,0 +1,9 @@
+node_modules
+web/node_modules
+data
+Sub-Store
+.git
+.github
+dist
+web/dist
+npm-debug.log*

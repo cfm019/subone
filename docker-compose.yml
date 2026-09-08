@@ -1,0 +1,13 @@
+services:
+  subone:
+    build: .
+    container_name: subone
+    restart: unless-stopped
+    ports:
+      - "3456:3456"
+    environment:
+      - PORT=3456
+      - NODE_ENV=production
+      # - ADMIN_PASSWORD=your_password_here
+    volumes:
+      - ./data:/app/data
