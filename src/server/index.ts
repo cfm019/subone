@@ -1170,13 +1170,11 @@ if (fs.existsSync(webDistPath)) {
 }
 
 app.listen(PORT, () => {
-  const subToken = appConfig.settings.subToken || 'token_placeholder';
-  console.log('=======================================================');
-  console.log(`🚀 SubOne Service running at http://localhost:${PORT}`);
-  console.log(`🔒 Password Protection:     ${appConfig.settings.adminPassword ? 'ENABLED' : 'DISABLED (Warning: Open to all)'}`);
-  console.log(`📡 Secret Auto-detect Sub:  http://localhost:${PORT}/s/${subToken}`);
-  console.log(`📡 Secret Mihomo Sub:       http://localhost:${PORT}/s/${subToken}?target=mihomo`);
-  console.log(`📡 Secret Singbox Sub:      http://localhost:${PORT}/s/${subToken}?target=singbox`);
-  console.log(`📡 Secret Loon Sub:         http://localhost:${PORT}/s/${subToken}?target=loon`);
-  console.log(`=======================================================`);
+  console.log('-------------------------------------------------------');
+  console.log(`SubOne listening on http://localhost:${PORT}`);
+  console.log(`Authentication: ${appConfig.settings.adminPassword ? 'Enabled' : 'Disabled (No password set)'}`);
+  if (appConfig.profiles && appConfig.profiles.length > 0) {
+    console.log(`Default subscription: http://localhost:${PORT}/s/${appConfig.profiles[0].token}`);
+  }
+  console.log('-------------------------------------------------------');
 });

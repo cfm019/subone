@@ -31,6 +31,15 @@ import {
 } from '../types';
 import { apiFetch, API_BASE } from '../api';
 
+function generateRandomSubToken(): string {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID().replace(/-/g, '');
+  }
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+}
+
 interface DashboardProps {
   config: AppConfig | null;
   nodes: ProxyNode[];
@@ -119,7 +128,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Open Create Modal
   const handleOpenCreate = () => {
-    const randToken = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+    const randToken = generateRandomSubToken();
     const defaultProf: SubscriptionProfile = {
       id: '',
       name: '',
@@ -1051,7 +1060,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                     disabled={tokenRefreshing}
                     onClick={async () => {
                       if (isCreating) {
-                        const rand = Math.random().toString(36).substring(2, 10) + Math.random().toString(36).substring(2, 10);
+                        const rand = generateRandomSubToken();
                         onChangeProfile(prev => prev ? { ...prev, token: rand } : prev);
                       } else {
                         if (!onRefreshToken) return;

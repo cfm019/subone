@@ -32,7 +32,7 @@ const ROOT_SERVER_CONFIG = path.resolve(process.cwd(), 'config.json');
 export interface ServerConfig {
   port: number;
   adminPassword?: string;
-  subToken: string;
+  subToken?: string;
 }
 
 export function generateRandomSubToken(): string {
@@ -40,32 +40,42 @@ export function generateRandomSubToken(): string {
 }
 
 /**
- * Loads the Server instance configuration (Admin password, secret sub token, port)
+ * Loads the Server instance configuration (Admin password, port, optional legacy subToken)
  * Checked in order: Environment Variables -> root `config.json` -> defaults/auto-generated
  */
 export function loadServerConfig(): ServerConfig {
   let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3456;
-  let adminPassword = process.env.ADMIN_PASSWORD || undefined;
-  let subToken = process.env.SUB_TOKEN || undefined;
+  let adminPassword = process.env.ADMIN_PASSWORD ? process.env.ADMIN_PASSWORD.trim() : undefined;
+  let subToken = process.env.SUB_TOKEN ? process.env.SUB_TOKEN.trim() : undefined;
 
   if (fs.existsSync(ROOT_SERVER_CONFIG)) {
     try {
       const data = fs.readFileSync(ROOT_SERVER_CONFIG, 'utf-8');
       const parsed = JSON.parse(data);
-      if (parsed.port && !process.env.PORT) port = Number(parsed.port);
-      if (parsed.adminPassword !== undefined && !process.env.ADMIN_PASSWORD) {
-        adminPassword = parsed.adminPassword ? String(parsed.adminPassword) : undefined;
+      if (parsed.port && !process.env.PORT) {
+        port = Number(parsed.port);
       }
-      if (parsed.subToken && !process.env.SUB_TOKEN) subToken = String(parsed.subToken);
+      if (parsed.adminPassword !== undefined && !process.env.ADMIN_PASSWORD) {
+        const pass = String(parsed.adminPassword).trim();
+        adminPassword = (pass.length > 0 && pass !== 'YOUR_ADMIN_PASSWORD_HERE') ? pass : undefined;
+      }
+      if (parsed.subToken && !process.env.SUB_TOKEN) {
+        subToken = String(parsed.subToken).trim();
+      }
     } catch (err) {
       console.error('Failed to parse root config.json:', err);
     }
-  }
-
-  // If subToken not yet specified, generate a random one and persist to config.json
-  if (!subToken) {
-    subToken = generateRandomSubToken();
-    saveServerConfig({ port, adminPassword, subToken });
+  } else {
+    const initialConfig = {
+      port,
+      adminPassword: adminPassword || 'YOUR_ADMIN_PASSWORD_HERE',
+    };
+    try {
+      fs.writeFileSync(ROOT_SERVER_CONFIG, JSON.stringify(initialConfig, null, 2) + '\n', 'utf-8');
+      console.log(`[db] Created default config.json at ${ROOT_SERVER_CONFIG}`);
+    } catch (err) {
+      console.error('[db] Failed to save default config.json:', err);
+    }
   }
 
   return { port, adminPassword, subToken };
