@@ -144,17 +144,17 @@ caddy reload
 
 ## 模版示例与参考
 
-Subone 支持为各个客户端自定义基础模版。在 `docs/` 目录下提供了各类客户端的标准基础模版及针对特定场景调优的参考配置：
+Subone 支持为各个客户端自定义基础模版。所有模版文件统一维护在根目录 `templates/` 下，系统启动与新建模版时直接从该目录读取对应文件，支持开箱即用与热修改：
 
 | 模版文件 | 目标客户端 | 适用场景与特征 |
 | :--- | :--- | :--- |
-| [docs/singbox-client-template.json](docs/singbox-client-template.json) | Sing-box | macOS/iOS 终端设备，配置 Tun 排除私网/Tailscale防回环、防IPv6泄漏 |
-| [docs/singbox-gateway-template.json](docs/singbox-gateway-template.json) | Sing-box | 软路由/Linux 旁路由透明网关，`auto_redirect` 自动流量与 DNS 接管 |
-| [docs/mihomo-template.yaml](docs/mihomo-template.yaml) | Mihomo / Clash | 标准 YAML 基础模版，Fake-IP DNS 设置与出站占位 |
-| [docs/loon-template.conf](docs/loon-template.conf) | Loon | 标准 CONF 基础模版，包含 [Proxy]、[Proxy Group]、[Rule] 占位 |
-| [docs/quantumultx-template.conf](docs/quantumultx-template.conf) | Quantumult X | 标准 CONF 基础模版，包含 [server_local]、[policy]、[filter_local] 占位 |
-| [docs/egern-template.yaml](docs/egern-template.yaml) | Egern | 标准 YAML 基础模版，支持 Hysteria 2、VLESS Reality 等协议 |
-| [docs/shadowrocket-template.conf](docs/shadowrocket-template.conf) | Shadowrocket | 标准 CONF 基础模版，支持全协议单行定义与规则集注入 |
+| [templates/singbox-client.json](templates/singbox-client.json) | Sing-box | macOS/iOS 终端设备，配置 Tun 排除私网/Tailscale防回环、防IPv6泄漏 |
+| [templates/singbox-gateway.json](templates/singbox-gateway.json) | Sing-box | 软路由/Linux 旁路由透明网关，`auto_redirect` 自动流量与 DNS 接管 |
+| [templates/mihomo.yaml](templates/mihomo.yaml) | Mihomo / Clash | 标准 YAML 基础模版，Fake-IP DNS 设置与出站占位 |
+| [templates/loon.conf](templates/loon.conf) | Loon | 标准 CONF 基础模版，包含 [Proxy]、[Proxy Group]、[Rule] 占位 |
+| [templates/quantumultx.conf](templates/quantumultx.conf) | Quantumult X | 标准 CONF 基础模版，包含 [server_local]、[policy]、[filter_local] 占位 |
+| [templates/egern.yaml](templates/egern.yaml) | Egern | 标准 YAML 基础模版，支持 Hysteria 2、VLESS Reality 等协议 |
+| [templates/shadowrocket.conf](templates/shadowrocket.conf) | Shadowrocket | 标准 CONF 基础模版，支持全协议单行定义与规则集注入 |
 
 ---
 

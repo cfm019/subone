@@ -1,0 +1,40 @@
+# Mihomo / Clash Meta 客户端模版示例
+# 节点、策略组与规则由 Subone 运行时自动注入
+
+port: 7890
+socks-port: 7891
+mixed-port: 7890
+allow-lan: false
+mode: rule
+log-level: info
+ipv6: false
+
+dns:
+  enable: true
+  listen: 127.0.0.1:1053
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  fallback:
+    - https://dns.cloudflare.com/dns-query
+    - https://dns.google/dns-query
+  fake-ip-filter:
+    - '*.lan'
+    - '*.local'
+    - localhost.ptlogin2.qq.com
+
+tun:
+  enable: false
+  stack: mixed
+  dns-hijack:
+    - any:53
+  auto-route: true
+  auto-detect-interface: true
+
+# 以下配置项由系统注入替换
+proxies: []
+proxy-groups: []
+rule-providers: {}
+rules: []

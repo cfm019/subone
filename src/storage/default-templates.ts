@@ -1,277 +1,121 @@
-import { ConfigTemplate, CountryPatternRule, ProxyGroupItem, UnifiedRuleItem } from '../types/index.js';
+import fs from 'fs';
+import path from 'path';
+import { ConfigTemplate, CountryPatternRule, ProxyGroupItem, UnifiedRuleItem, ClientType } from '../types/index.js';
 import { DEFAULT_COUNTRY_PATTERNS } from '../core/parser/country.js';
 
 export const INITIAL_COUNTRY_RULES: CountryPatternRule[] = DEFAULT_COUNTRY_PATTERNS;
 
-export const DEFAULT_SINGBOX_TEMPLATE = JSON.stringify({
-  "log": {
-    "disabled": false,
-    "level": "info",
-    "timestamp": true
-  },
-  "dns": {
-    "servers": [
-      {
-        "tag": "alidns",
-        "type": "udp",
-        "server": "223.5.5.5"
-      },
-      {
-        "tag": "remote",
-        "type": "https",
-        "server": "1.1.1.1",
-        "path": "/dns-query",
-        "detour": "🚀 节点选择"
-      },
-      {
-        "tag": "fakeip",
-        "type": "fakeip",
-        "inet4_range": "198.18.0.0/15"
-      },
-      {
-        "tag": "system",
-        "type": "local"
-      }
-    ],
-    "rules": [
-      {
-        "rule_set": "geosite-category-ads-all",
-        "action": "reject"
-      },
-      {
-        "domain_suffix": [
-          "local",
-          "arpa",
-          "in-addr.arpa",
-          "ip6.arpa",
-          "gstatic.com",
-          "gvt1.com",
-          "cp.cloudflare.com"
-        ],
-        "server": "alidns"
-      },
-      {
-        "rule_set": [
-          "geosite-geolocation-cn",
-          "geosite-cn",
-          "geosite-apple",
-          "geosite-steam@cn"
-        ],
-        "server": "alidns"
-      },
-      {
-        "query_type": "AAAA",
-        "action": "reject"
-      },
-      {
-        "rule_set": [
-          "geosite-geolocation-!cn",
-          "geosite-category-ai-!cn",
-          "geosite-google",
-          "geosite-github",
-          "geosite-youtube",
-          "geosite-telegram",
-          "geosite-steam"
-        ],
-        "server": "fakeip"
-      },
-      {
-        "clash_mode": "Direct",
-        "server": "alidns"
-      },
-      {
-        "clash_mode": "Global",
-        "server": "remote"
-      }
-    ],
-    "final": "remote",
-    "strategy": "prefer_ipv4"
-  },
-  "inbounds": [
-    {
-      "type": "tun",
-      "address": [
-        "172.19.0.1/30",
-        "fdfe:dcba:9876::1/126"
-      ],
-      "mtu": 1400,
-      "route_exclude_address": [
-        "192.168.0.0/16",
-        "10.0.0.0/8",
-        "172.16.0.0/12",
-        "100.64.0.0/10",
-        "100.100.100.100/32",
-        "fd7a:115c:a1e0::/48",
-        "fe80::/10",
-        "fc00::/7"
-      ],
-      "auto_route": true,
-      "strict_route": true
-    },
-    {
-      "type": "mixed",
-      "listen": "127.0.0.1",
-      "listen_port": 7890
-    }
+const TEMPLATE_FILE_MAP: Record<ClientType, string[]> = {
+  singbox: [
+    'singbox-client-template.json',
+    'singbox-client.json',
+    'singbox.json',
+    'singbox-template.json',
   ],
-  "outbounds": [],
-  "route": {
-    "auto_detect_interface": true,
-    "default_domain_resolver": {
-      "server": "alidns"
-    },
-    "default_http_client": "default",
-    "rules": [
-      {
-        "action": "sniff"
-      },
-      {
-        "protocol": "quic",
-        "action": "reject"
-      },
-      {
-        "type": "logical",
-        "mode": "or",
-        "rules": [
-          {
-            "protocol": "dns"
-          },
-          {
-            "port": 53
+  mihomo: [
+    'mihomo-template.yaml',
+    'mihomo.yaml',
+    'clash-template.yaml',
+    'clash.yaml',
+  ],
+  loon: [
+    'loon-template.conf',
+    'loon.conf',
+  ],
+  quantumultx: [
+    'quantumultx-template.conf',
+    'quantumultx.conf',
+    'qx-template.conf',
+    'qx.conf',
+  ],
+  egern: [
+    'egern-template.yaml',
+    'egern.yaml',
+  ],
+  shadowrocket: [
+    'shadowrocket-template.conf',
+    'shadowrocket.conf',
+    'rocket-template.conf',
+    'rocket.conf',
+  ],
+};
+
+function readTemplateFile(type: ClientType): string | null {
+  const searchDirs = [
+    path.resolve(process.cwd(), 'templates'),
+    path.resolve(process.cwd(), 'docs'),
+    path.resolve(__dirname, '../../templates'),
+    path.resolve(__dirname, '../../docs'),
+    path.resolve(__dirname, '../templates'),
+    path.resolve(__dirname, '../docs'),
+  ];
+
+  const candidateNames = TEMPLATE_FILE_MAP[type] || [];
+
+  for (const dir of searchDirs) {
+    if (!fs.existsSync(dir)) continue;
+    for (const name of candidateNames) {
+      const filePath = path.join(dir, name);
+      if (fs.existsSync(filePath)) {
+        try {
+          const content = fs.readFileSync(filePath, 'utf-8');
+          if (content && content.trim().length > 0) {
+            return content;
           }
-        ],
-        "action": "hijack-dns"
-      },
-      {
-        "type": "logical",
-        "mode": "or",
-        "rules": [
-          {
-            "port": 853
-          },
-          {
-            "protocol": "stun"
-          }
-        ],
-        "action": "reject"
+        } catch {
+          // ignore error and continue search
+        }
       }
-    ],
-    "rule_set": [],
-    "final": "🐟 漏网之鱼"
-  },
-  "experimental": {
-    "cache_file": {
-      "enabled": true
-    },
-    "clash_api": {
-      "default_mode": "Rule"
     }
-  },
-  "http_clients": [
-    {
-      "tag": "default"
-    }
-  ]
-}, null, 2);
+  }
 
-export const DEFAULT_MIHOMO_TEMPLATE = `port: 7890
-socks-port: 7891
-allow-lan: true
-mode: rule
-log-level: info
-ipv6: false
+  return null;
+}
 
-proxy-groups: []
+function getFallbackTemplate(type: ClientType): string {
+  switch (type) {
+    case 'singbox':
+      return JSON.stringify({
+        log: { level: 'info' },
+        dns: { servers: [{ tag: 'remote', type: 'https', server: '1.1.1.1' }] },
+        inbounds: [{ type: 'tun', auto_route: true }],
+        outbounds: [],
+        route: { rules: [], final: '🐟 漏网之鱼' },
+      }, null, 2);
+    case 'mihomo':
+      return `port: 7890\nmode: rule\nproxies: []\nproxy-groups: []\nrules:\n  - MATCH,🐟 漏网之鱼\n`;
+    case 'loon':
+      return `[General]\nipv6 = false\n\n[Proxy]\n\n[Proxy Group]\n\n[Rule]\nFINAL,🐟 漏网之鱼\n`;
+    case 'quantumultx':
+      return `[general]\nserver_check_url = http://cp.cloudflare.com/generate_204\n\n[policy]\n\n[server_local]\n\n[filter_local]\nfinal=🐟 漏网之鱼\n`;
+    case 'egern':
+      return `general:\n  log-level: notify\n\nproxies: []\nproxy-groups: []\nrules:\n  - MATCH,🐟 漏网之鱼\n`;
+    case 'shadowrocket':
+      return `[General]\nbypass-system = true\n\n[Proxy]\n\n[Proxy Group]\n\n[Rule]\nFINAL,🐟 漏网之鱼\n`;
+    default:
+      return '';
+  }
+}
 
-rules:
-  - MATCH,🐟 漏网之鱼
-`;
+export function loadDefaultTemplate(type: ClientType): string {
+  const fileContent = readTemplateFile(type);
+  if (fileContent) return fileContent;
+  return getFallbackTemplate(type);
+}
 
-export const DEFAULT_LOON_TEMPLATE = `[General]
-ipv6-vif = auto
-ip-mode = dual
-allow-udp-proxy = true
-skip-proxy = 192.168.0.0/16,10.0.0.0/8,172.16.0.0/12,localhost,*.local
-dns-server = 223.5.5.5,119.29.29.29
-
-[Proxy]
-
-[Remote Proxy]
-
-[Remote Filter]
-
-[Proxy Group]
-
-[Rule]
-
-[Remote Rule]
-
-FINAL,🐟 漏网之鱼
-`;
-
-export const DEFAULT_QUANTUMULTX_TEMPLATE = `[general]
-excluded_routes = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 127.0.0.1/32
-dns_exclusion_list = *.local, localhost
-server_check_url = http://cp.cloudflare.com/generate_204
-
-[dns]
-server = 223.5.5.5
-server = 119.29.29.29
-
-[policy]
-
-[server_remote]
-
-[server_local]
-
-[filter_remote]
-
-[filter_local]
-final=🐟 漏网之鱼
-`;
-
-export const DEFAULT_EGERN_TEMPLATE = `general:
-  log-level: notify
-
-dns:
-  nameservers:
-    - 223.5.5.5
-    - 119.29.29.29
-
-proxies: []
-
-proxy-groups: []
-
-rules:
-  - MATCH,🐟 漏网之鱼
-`;
-
-export const DEFAULT_SHADOWROCKET_TEMPLATE = `[General]
-bypass-system = true
-skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 127.0.0.1/32, localhost, *.local
-bypass-tun = 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.88.99.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 255.255.255.255/32
-dns-server = system, 223.5.5.5, 119.29.29.29
-ipv6 = false
-
-[Rule]
-FINAL,🐟 漏网之鱼
-
-[Host]
-localhost = 127.0.0.1
-
-[URL Rewrite]
-
-[Proxy]
-
-[Proxy Group]
-`;
+export const DEFAULT_SINGBOX_TEMPLATE = loadDefaultTemplate('singbox');
+export const DEFAULT_MIHOMO_TEMPLATE = loadDefaultTemplate('mihomo');
+export const DEFAULT_LOON_TEMPLATE = loadDefaultTemplate('loon');
+export const DEFAULT_QUANTUMULTX_TEMPLATE = loadDefaultTemplate('quantumultx');
+export const DEFAULT_EGERN_TEMPLATE = loadDefaultTemplate('egern');
+export const DEFAULT_SHADOWROCKET_TEMPLATE = loadDefaultTemplate('shadowrocket');
 
 export const INITIAL_TEMPLATES: ConfigTemplate[] = [
   {
     id: 'tpl-singbox-default',
     name: 'Sing-box 标准模版',
     type: 'singbox',
-    content: DEFAULT_SINGBOX_TEMPLATE,
+    content: loadDefaultTemplate('singbox'),
     isDefault: true,
     description: '适用于 Singbox 客户端 Tun 模式配置',
   },
@@ -279,7 +123,7 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     id: 'tpl-mihomo-default',
     name: 'Mihomo 模版',
     type: 'mihomo',
-    content: DEFAULT_MIHOMO_TEMPLATE,
+    content: loadDefaultTemplate('mihomo'),
     isDefault: true,
     description: '适用于 Mihomo 配置',
   },
@@ -287,7 +131,7 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     id: 'tpl-loon-default',
     name: 'Loon 标准模版',
     type: 'loon',
-    content: DEFAULT_LOON_TEMPLATE,
+    content: loadDefaultTemplate('loon'),
     isDefault: true,
     description: '适用于 Loon (iOS / macOS) 的标准配置',
   },
@@ -295,7 +139,7 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     id: 'tpl-qx-default',
     name: 'Quantumult X 标准模版',
     type: 'quantumultx',
-    content: DEFAULT_QUANTUMULTX_TEMPLATE,
+    content: loadDefaultTemplate('quantumultx'),
     isDefault: true,
     description: '适用于 Quantumult X 客户端配置',
   },
@@ -303,7 +147,7 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     id: 'tpl-egern-default',
     name: 'Egern 标准模版',
     type: 'egern',
-    content: DEFAULT_EGERN_TEMPLATE,
+    content: loadDefaultTemplate('egern'),
     isDefault: true,
     description: '适用于 Egern 客户端 YAML 配置',
   },
@@ -311,7 +155,7 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     id: 'tpl-shadowrocket-default',
     name: 'Shadowrocket 标准模版',
     type: 'shadowrocket',
-    content: DEFAULT_SHADOWROCKET_TEMPLATE,
+    content: loadDefaultTemplate('shadowrocket'),
     isDefault: true,
     description: '适用于 Shadowrocket (小火箭) 客户端配置',
   },

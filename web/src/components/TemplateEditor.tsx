@@ -17,7 +17,7 @@ import { ConfigTemplate, ClientType } from '../types';
 
 interface TemplateEditorProps {
   templates: ConfigTemplate[];
-  onAddTemplate: (template: Partial<ConfigTemplate>) => Promise<void>;
+  onAddTemplate: (template: Partial<ConfigTemplate>) => Promise<ConfigTemplate | undefined>;
   onUpdateTemplate: (id: string, updates: Partial<ConfigTemplate>) => Promise<void>;
   onDeleteTemplate: (id: string) => Promise<void>;
   onResetTemplate: (id: string) => Promise<ConfigTemplate>;
@@ -104,15 +104,17 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName.trim()) return;
-    await onAddTemplate({
+    const created = await onAddTemplate({
       name: newName.trim(),
       type: newType,
       description: newDesc.trim() || undefined,
-      content: currentTemplate ? currentTemplate.content : '# 模版内容',
     });
     setNewName('');
     setNewDesc('');
     setShowNewModal(false);
+    if (created?.id) {
+      setSelectedTemplateId(created.id);
+    }
   };
 
   const handleCopyPreview = () => {

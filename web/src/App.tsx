@@ -313,13 +313,18 @@ export function App() {
 
   // Templates handlers
 
-  const handleAddTemplate = async (template: Partial<ConfigTemplate>) => {
+  const handleAddTemplate = async (template: Partial<ConfigTemplate>): Promise<ConfigTemplate | undefined> => {
     const res = await apiFetch(`${API_BASE}/templates`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(template),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const data = await res.json();
+      await fetchData();
+      return data.data;
+    }
+    return undefined;
   };
 
   const handleUpdateTemplate = async (id: string, updates: Partial<ConfigTemplate>) => {

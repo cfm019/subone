@@ -31,7 +31,7 @@ import {
   SubscriptionProfile,
 } from '../types/index.js';
 
-import { INITIAL_COUNTRY_RULES, INITIAL_TEMPLATES } from '../storage/default-templates.js';
+import { INITIAL_COUNTRY_RULES, INITIAL_TEMPLATES, loadDefaultTemplate } from '../storage/default-templates.js';
 
 
 const app = express();
@@ -904,12 +904,35 @@ app.get('/api/templates', (req, res) => {
   res.json({ success: true, data: appConfig.templates });
 });
 
+app.get('/api/templates/defaults', (req, res) => {
+  const defaults: Record<string, string> = {
+    singbox: loadDefaultTemplate('singbox'),
+    mihomo: loadDefaultTemplate('mihomo'),
+    loon: loadDefaultTemplate('loon'),
+    quantumultx: loadDefaultTemplate('quantumultx'),
+    egern: loadDefaultTemplate('egern'),
+    shadowrocket: loadDefaultTemplate('shadowrocket'),
+  };
+  res.json({ success: true, data: defaults });
+});
+
+app.get('/api/templates/default/:type', (req, res) => {
+  const type = req.params.type as ClientType;
+  const content = loadDefaultTemplate(type);
+  res.json({ success: true, type, content });
+});
+
 app.post('/api/templates', (req, res) => {
+  const type: ClientType = req.body.type || 'singbox';
+  let content = req.body.content;
+  if (!content || !content.trim() || content.trim() === '# 模版内容') {
+    content = loadDefaultTemplate(type);
+  }
   const newTemplate: ConfigTemplate = {
     id: `tpl-${Date.now()}`,
-    name: req.body.name || '新建配置模版',
-    type: req.body.type || 'singbox',
-    content: req.body.content || '',
+    name: req.body.name || `新建${type}配置模版`,
+    type,
+    content,
     description: req.body.description || '',
     isDefault: Boolean(req.body.isDefault),
   };
@@ -945,14 +968,10 @@ app.post('/api/templates/:id/reset', (req, res) => {
     return res.status(404).json({ success: false, message: '模版未找到' });
   }
   const tpl = appConfig.templates[index];
-  const defaultTpl = INITIAL_TEMPLATES.find(t => t.type?.toLowerCase() === tpl.type?.toLowerCase());
-  if (defaultTpl) {
-    tpl.content = defaultTpl.content;
-    appConfig.templates[index] = tpl;
-    saveConfig(appConfig);
-    return res.json({ success: true, data: tpl });
-  }
-  res.status(404).json({ success: false, message: `未找到类型为 ${tpl.type} 的内置默认模版` });
+  tpl.content = loadDefaultTemplate(tpl.type);
+  appConfig.templates[index] = tpl;
+  saveConfig(appConfig);
+  return res.json({ success: true, data: tpl });
 });
 
 app.delete('/api/templates/:id', (req, res) => {
