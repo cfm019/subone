@@ -7,16 +7,64 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   if (node.type === 'ss') {
     const cipher = node.method || 'aes-128-gcm';
     const pwd = `"${node.password || ''}"`;
-    return `${name} = Shadowsocks,${node.server},${node.port},${cipher},${pwd},fast-open=false,udp=true,block-quic=false`;
+    let line = `${name} = Shadowsocks,${node.server},${node.port},${cipher},${pwd}`;
+    if (node.plugin === 'obfs') {
+      line += `,obfs=${node.pluginOpts?.mode || 'http'},obfs-host=${node.pluginOpts?.host || ''}`;
+    } else if (node.plugin === 'v2ray-plugin') {
+      line += `,plugin=v2ray-plugin,plugin-opts="mode=${node.pluginOpts?.mode || 'websocket'};host=${node.pluginOpts?.host || ''};path=${node.pluginOpts?.path || '/'}"`;
+    }
+    line += `,fast-open=false,udp=true,block-quic=false`;
+    return line;
+  }
+
+  if (node.type === 'anytls') {
+    let line = `${name} = AnyTLS,${node.server},${node.port},"${node.password || ''}"`;
+    if (node.sni) line += `,sni=${node.sni}`;
+    if (node.skipCertVerify) line += `,skip-cert-verify=true`;
+    if (node.fingerprint) line += `,client-fingerprint=${node.fingerprint}`;
+    line += `,udp=true,block-quic=false`;
+    return line;
+  }
+
+  if (node.type === 'hysteria2') {
+    let line = `${name} = Hysteria2,${node.server},${node.port},"${node.password || ''}"`;
+    if (node.sni) line += `,sni=${node.sni}`;
+    if (node.skipCertVerify) line += `,skip-cert-verify=true`;
+    const obfsPwd = node.obfsPassword || (node.obfs && node.obfs !== 'salamander' ? node.obfs : undefined);
+    if (obfsPwd) line += `,salamander-password="${obfsPwd}"`;
+    if (node.downMbps) line += `,download-bandwidth=${node.downMbps}`;
+    if (node.upMbps) line += `,upload-bandwidth=${node.upMbps}`;
+    line += `,udp=true,block-quic=false`;
+    return line;
   }
 
   if (node.type === 'vless') {
     let line = `${name} = vless,${node.server},${node.port},"${node.uuid || ''}"`;
-    if (node.network) line += `,transport=${node.network}`;
-    if (node.network === 'ws' && node.wsPath) line += `,path=${node.wsPath}`;
+    const net = (node.network || 'tcp').toLowerCase();
+
+    if (net === 'ws') {
+      line += `,transport=ws`;
+      if (node.wsPath) line += `,path=${node.wsPath}`;
+      const host = node.wsHeaders?.Host || node.wsHeaders?.host || node.sni;
+      if (host) line += `,host=${host}`;
+      if (node.earlyDataHeaderName) line += `,ws-early-data-header-name=${node.earlyDataHeaderName}`;
+    } else if (net === 'grpc') {
+      line += `,transport=grpc`;
+      if (node.grpcServiceName) line += `,grpc-service-name=${node.grpcServiceName}`;
+    } else if (net === 'http' || net === 'h2') {
+      line += `,transport=http`;
+      if (node.h2Path) line += `,path=${node.h2Path}`;
+      const host = node.h2Host || node.sni;
+      if (host) line += `,host=${host}`;
+    } else if (net !== 'tcp') {
+      line += `,transport=${net}`;
+    }
+
     if (node.tls) line += `,over-tls=true`;
     if (node.sni) line += `,tls-name=${node.sni}`;
     if (node.skipCertVerify) line += `,skip-cert-verify=true`;
+    if (node.fingerprint) line += `,client-fingerprint=${node.fingerprint}`;
+
     if (node.reality && node.reality.enabled) {
       line += `,reality=true,public-key=${node.reality.publicKey}`;
       if (node.reality.shortId) line += `,short-id=${node.reality.shortId}`;
@@ -27,9 +75,23 @@ export function nodeToLoonProxy(node: ProxyNode): string {
 
   if (node.type === 'trojan') {
     let line = `${name} = trojan,${node.server},${node.port},"${node.password || ''}"`;
-    if (node.tls) line += `,over-tls=true`;
+    const net = (node.network || 'tcp').toLowerCase();
+
+    if (net === 'ws') {
+      line += `,transport=ws`;
+      if (node.wsPath) line += `,path=${node.wsPath}`;
+      const host = node.wsHeaders?.Host || node.wsHeaders?.host || node.sni;
+      if (host) line += `,host=${host}`;
+      if (node.earlyDataHeaderName) line += `,ws-early-data-header-name=${node.earlyDataHeaderName}`;
+    } else if (net === 'grpc') {
+      line += `,transport=grpc`;
+      if (node.grpcServiceName) line += `,grpc-service-name=${node.grpcServiceName}`;
+    }
+
+    if (node.tls !== false) line += `,over-tls=true`;
     if (node.sni) line += `,tls-name=${node.sni}`;
-    if (node.network === 'ws' && node.wsPath) line += `,transport=ws,path=${node.wsPath}`;
+    if (node.skipCertVerify) line += `,skip-cert-verify=true`;
+    if (node.fingerprint) line += `,client-fingerprint=${node.fingerprint}`;
     line += `,udp=true,block-quic=false`;
     return line;
   }
@@ -37,16 +99,32 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   if (node.type === 'vmess') {
     const cipher = node.cipher || 'auto';
     let line = `${name} = vmess,${node.server},${node.port},${cipher},"${node.uuid || ''}"`;
+    const net = (node.network || 'tcp').toLowerCase();
+
+    if (net === 'ws') {
+      line += `,transport=ws`;
+      if (node.wsPath) line += `,path=${node.wsPath}`;
+      const host = node.wsHeaders?.Host || node.wsHeaders?.host || node.sni;
+      if (host) line += `,host=${host}`;
+      if (node.earlyDataHeaderName) line += `,ws-early-data-header-name=${node.earlyDataHeaderName}`;
+    } else if (net === 'grpc') {
+      line += `,transport=grpc`;
+      if (node.grpcServiceName) line += `,grpc-service-name=${node.grpcServiceName}`;
+    }
+
     if (node.tls) line += `,over-tls=true`;
     if (node.sni) line += `,tls-name=${node.sni}`;
-    if (node.network === 'ws' && node.wsPath) line += `,transport=ws,path=${node.wsPath}`;
+    if (node.skipCertVerify) line += `,skip-cert-verify=true`;
+    if (node.fingerprint) line += `,client-fingerprint=${node.fingerprint}`;
     line += `,udp=true,block-quic=false`;
     return line;
   }
 
-  if (node.type === 'hysteria2') {
-    let line = `${name} = hysteria2,${node.server},${node.port},"${node.password || ''}"`;
+  if (node.type === 'tuic') {
+    let line = `${name} = TUIC,${node.server},${node.port},"${node.uuid || ''}","${node.password || ''}"`;
     if (node.sni) line += `,sni=${node.sni}`;
+    if (node.skipCertVerify) line += `,skip-cert-verify=true`;
+    if (node.congestionControl) line += `,congestion-controller=${node.congestionControl}`;
     line += `,udp=true,block-quic=false`;
     return line;
   }
@@ -76,6 +154,10 @@ export function nodeToLoonProxy(node: ProxyNode): string {
     }
     line += `,fast-open=false,udp=true`;
     return line;
+  }
+
+  if (node.type === 'naive') {
+    return `# Unsupported on Loon (NaiveProxy requires Chromium network stack): ${name}`;
   }
 
   return `# Unsupported node: ${name}`;

@@ -103,7 +103,8 @@ function parseVless(uri: string, index: number, countryPatterns?: CountryPattern
   const flow = params.get('flow') || (name.toLowerCase().includes('vision') || name.toLowerCase().includes('xtls') ? 'xtls-rprx-vision' : undefined);
   const sni = params.get('sni') || undefined;
   const fp = params.get('fp') || 'chrome';
-  const pbk = params.get('pbk') || undefined;
+  const rawPbk = params.get('pbk');
+  const pbk = rawPbk ? rawPbk.replace(/ /g, '+') : undefined;
   const sid = params.get('sid') || undefined;
   const rawPath = params.get('path') || undefined;
   const host = params.get('host') || undefined;
@@ -253,6 +254,7 @@ function parseTrojan(uri: string, index: number, countryPatterns?: CountryPatter
   const type = params.get('type') || 'tcp';
   const path = params.get('path') || undefined;
   const host = params.get('host') || undefined;
+  const serviceName = params.get('serviceName') || params.get('service_name') || undefined;
   const fp = params.get('fp') || 'chrome';
   const insecure = params.get('insecure') === '1' || params.get('allowInsecure') === '1' || params.get('skipCertVerify') === 'true';
 
@@ -279,6 +281,7 @@ function parseTrojan(uri: string, index: number, countryPatterns?: CountryPatter
     network: type as any,
     wsPath: path,
     wsHeaders: host ? { Host: host } : undefined,
+    grpcServiceName: serviceName,
   };
 }
 

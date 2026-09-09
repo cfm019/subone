@@ -22,6 +22,10 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     base.cipher = node.method || 'aes-128-gcm';
     base.password = node.password;
     if (node.packetEncoding) base['packet-encoding'] = node.packetEncoding;
+    if (node.plugin) {
+      base.plugin = node.plugin;
+      base['plugin-opts'] = node.pluginOpts;
+    }
     return base;
   }
 
@@ -33,6 +37,8 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
       base.tls = true;
       if (node.sni) base.servername = node.sni;
       if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
+      if (node.skipCertVerify) base['skip-cert-verify'] = true;
+      if (node.alpn) base.alpn = node.alpn;
       if (node.reality && node.reality.enabled) {
         base.reality = {
           'public-key': node.reality.publicKey,
@@ -72,6 +78,8 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     if (node.tls) {
       base.tls = true;
       if (node.sni) base.servername = node.sni;
+      if (node.skipCertVerify) base['skip-cert-verify'] = true;
+      if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
     }
     if (node.network) {
       base.network = node.network;
@@ -82,6 +90,17 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
         };
         if (node.maxEarlyData) base['ws-opts']['max-early-data'] = node.maxEarlyData;
         if (node.earlyDataHeaderName) base['ws-opts']['early-data-header-name'] = node.earlyDataHeaderName;
+      }
+      if (node.network === 'grpc' && node.grpcServiceName) {
+        base['grpc-opts'] = {
+          'grpc-service-name': node.grpcServiceName,
+        };
+      }
+      if (node.network === 'http' || node.network === 'h2') {
+        base['h2-opts'] = {
+          host: node.sni ? [node.sni] : [],
+          path: node.wsPath || '/',
+        };
       }
     }
     return base;
@@ -101,6 +120,19 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
           path: node.wsPath,
           headers: node.wsHeaders || {},
         };
+        if (node.maxEarlyData) base['ws-opts']['max-early-data'] = node.maxEarlyData;
+        if (node.earlyDataHeaderName) base['ws-opts']['early-data-header-name'] = node.earlyDataHeaderName;
+      }
+      if (node.network === 'grpc' && node.grpcServiceName) {
+        base['grpc-opts'] = {
+          'grpc-service-name': node.grpcServiceName,
+        };
+      }
+      if (node.network === 'http' || node.network === 'h2') {
+        base['h2-opts'] = {
+          host: node.sni ? [node.sni] : [],
+          path: node.wsPath || '/',
+        };
       }
     }
     return base;
@@ -119,9 +151,9 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     if (node.alpn) base.alpn = node.alpn;
     if (node.skipCertVerify) base['skip-cert-verify'] = true;
     if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
-    if (node.obfs) {
-      base.obfs = node.obfs;
-      base['obfs-password'] = node.obfsPassword;
+    if (node.obfsPassword || node.obfs) {
+      base.obfs = node.obfs || 'salamander';
+      base['obfs-password'] = node.obfsPassword || node.obfs;
     }
     return base;
   }
@@ -183,6 +215,8 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     if (node.skipCertVerify) base['skip-cert-verify'] = true;
     if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
     if (node.idleSessionTimeout) base['idle-session-timeout'] = node.idleSessionTimeout;
+    if (node.idleSessionCheckInterval) base['idle-session-check-interval'] = node.idleSessionCheckInterval;
+    if (node.minIdleSession) base['min-idle-session'] = node.minIdleSession;
     return base;
   }
 
