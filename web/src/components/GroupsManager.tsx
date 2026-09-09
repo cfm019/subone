@@ -138,7 +138,6 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
       name: '⚡️ 独立节点组',
       type: 'select',
       use: ['独立节点组'],
-      proxies: customNodes.map(n => n.name),
     });
   };
 
@@ -663,57 +662,6 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                       })}
                   </div>
                 </div>
-
-                {customNodes.length > 0 && (
-                  <div className="space-y-1.5 pt-2 border-t border-[#F0ECE4]">
-                    <div className="flex items-center justify-between">
-                      <span className="text-[11px] text-[#78746D] font-medium flex items-center gap-1">
-                        <span>独立节点 ({customNodes.length} 个可用，点击加入当前组)：</span>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const names = customNodes.map(n => n.name);
-                          const current = formData.proxies || [];
-                          const allSelected = names.every(n => current.includes(n));
-                          if (allSelected) {
-                            setFormData({ ...formData, proxies: current.filter(p => !names.includes(p)) });
-                          } else {
-                            const combined = Array.from(new Set([...current, ...names]));
-                            setFormData({ ...formData, proxies: combined });
-                          }
-                        }}
-                        className="text-[10px] text-[#CC785C] hover:underline cursor-pointer"
-                      >
-                        {customNodes.every(n => (formData.proxies || []).includes(n.name)) ? '取消全选' : '全部添加'}
-                      </button>
-                    </div>
-                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1.5 bg-[#FAF8F5] rounded-xl border border-[#E8E4DC]">
-                      {customNodes.map(n => {
-                        const isSelected = (formData.proxies || []).includes(n.name);
-                        return (
-                          <button
-                            key={n.id}
-                            type="button"
-                            onClick={() => handleToggleProxy(n.name)}
-                            className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer border flex items-center gap-1.5 ${isSelected
-                              ? 'bg-[#2D6A5A] text-white border-[#2D6A5A]'
-                              : 'bg-white text-[#59554E] border-[#E3DDD2] hover:border-[#2D6A5A]/60'
-                              }`}
-                            title={`${(n.type || '').toUpperCase()} - ${n.server}:${n.port}`}
-                          >
-                            <span className="text-[10px]">{n.countryEmoji || '🌐'}</span>
-                            <span className="truncate max-w-[160px]">{n.name}</span>
-                            <span className={`text-[9px] px-1 rounded uppercase font-mono font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-[#F0ECE4] text-[#59554E]'}`}>
-                              {n.type}
-                            </span>
-                            <span>{isSelected ? '✓' : '+'}</span>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
 
                 <div className="flex items-center gap-2 pt-1">
                   <input

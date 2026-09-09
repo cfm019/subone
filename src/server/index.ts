@@ -200,7 +200,6 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
       name: targetTag,
       type: 'select',
       use: ['独立节点组'],
-      proxies: customSrc.nodes.map(n => n.name),
     };
     config.proxyGroups.push(customGroup);
 
@@ -738,7 +737,6 @@ app.post('/api/groups/generate-country-presets', (req, res) => {
         name: groupTag,
         type: src.id === 'custom' ? 'select' : 'urltest',
         use: [srcName],
-        proxies: src.id === 'custom' ? (src.nodes || []).map(n => n.name) : undefined,
         tolerance: 50,
         interval: 300,
         url: 'https://www.gstatic.com/generate_204',
