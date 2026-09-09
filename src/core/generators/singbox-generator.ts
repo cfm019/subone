@@ -71,10 +71,9 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
         };
       }
 
-      if (node.certificatePublicKeySha256) {
+      if (node.certificatePublicKeySha256 && node.certificatePublicKeySha256.length > 0) {
         base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
-      }
-      if (node.certificate) {
+      } else if (node.certificate) {
         base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
       }
     }
@@ -161,10 +160,9 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
         fingerprint: node.fingerprint,
       };
     }
-    if (node.certificatePublicKeySha256) {
+    if (node.certificatePublicKeySha256 && node.certificatePublicKeySha256.length > 0) {
       base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
-    }
-    if (node.certificate) {
+    } else if (node.certificate) {
       base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
     }
     if (node.network === 'ws') {
@@ -209,10 +207,9 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     if (node.skipCertVerify !== undefined) {
       base.tls.insecure = Boolean(node.skipCertVerify);
     }
-    if (node.certificatePublicKeySha256) {
+    if (node.certificatePublicKeySha256 && node.certificatePublicKeySha256.length > 0) {
       base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
-    }
-    if (node.certificate) {
+    } else if (node.certificate) {
       base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
     }
     const obfsType = node.obfs || node.raw?.obfs;
@@ -241,10 +238,9 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     if (node.skipCertVerify !== undefined) {
       base.tls.insecure = Boolean(node.skipCertVerify);
     }
-    if (node.certificatePublicKeySha256) {
+    if (node.certificatePublicKeySha256 && node.certificatePublicKeySha256.length > 0) {
       base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
-    }
-    if (node.certificate) {
+    } else if (node.certificate) {
       base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
     }
     return base;
@@ -294,10 +290,9 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     if (node.skipCertVerify !== undefined) {
       base.tls.insecure = Boolean(node.skipCertVerify);
     }
-    if (node.certificatePublicKeySha256) {
+    if (node.certificatePublicKeySha256 && node.certificatePublicKeySha256.length > 0) {
       base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
-    }
-    if (node.certificate) {
+    } else if (node.certificate) {
       base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
     }
     return base;
@@ -323,9 +318,6 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     }
     if (node.certificate) {
       base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
-    }
-    if (node.certificatePublicKeySha256) {
-      base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
     }
     return base;
   }
