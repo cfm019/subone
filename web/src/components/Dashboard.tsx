@@ -718,7 +718,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <div className="flex flex-wrap items-center gap-2.5">
                 <span className="inline-flex items-center gap-1.5 font-medium text-[#1F1E1D]">
                   <span className="w-2 h-2 rounded-full bg-[#5A7A6F]"></span>
-                  {previewData.clientType === 'singbox' ? 'Sing-box JSON' : previewData.clientType === 'mihomo' ? 'Clash / Mihomo YAML' : 'Loon Conf'}
+                  {previewData.clientType === 'singbox'
+                    ? 'Sing-box JSON'
+                    : previewData.clientType === 'mihomo'
+                    ? 'Clash / Mihomo YAML'
+                    : previewData.clientType === 'loon'
+                    ? 'Loon CONF'
+                    : previewData.clientType === 'quantumultx'
+                    ? 'Quantumult X CONF'
+                    : previewData.clientType === 'egern'
+                    ? 'Egern YAML'
+                    : previewData.clientType === 'shadowrocket'
+                    ? 'Shadowrocket CONF'
+                    : previewData.clientType}
                 </span>
                 <span>•</span>
                 <span>包含节点：<strong className="text-[#1F1E1D]">{previewData.nodeCount}</strong> 个</span>
@@ -745,7 +757,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </button>
                 <button
                   onClick={() => {
-                    const ext = previewData.clientType === 'singbox' ? 'json' : previewData.clientType === 'mihomo' ? 'yaml' : 'conf';
+                    const ext = previewData.clientType === 'singbox'
+                      ? 'json'
+                      : (previewData.clientType === 'mihomo' || previewData.clientType === 'egern' ? 'yaml' : 'conf');
                     handleDownloadConfig(previewData.content, `${previewData.profileName}_${previewData.clientType}.${ext}`);
                   }}
                   className="px-2.5 py-1 bg-white border border-[#E3DDD2] hover:border-[#CC785C]/50 text-[11px] font-medium text-[#4A4742] hover:text-[#1F1E1D] rounded-md transition-colors flex items-center gap-1 cursor-pointer shadow-2xs"

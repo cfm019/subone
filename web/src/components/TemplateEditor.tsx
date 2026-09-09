@@ -125,20 +125,35 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
 
   const handleDownloadPreview = () => {
     if (!currentTemplate) return;
-    const ext = currentTemplate.type === 'singbox' ? 'json' : (currentTemplate.type === 'mihomo' ? 'yaml' : 'mcf');
-    const blob = new Blob([previewContent], { type: 'text/plain;charset=utf-8' });
+    const ext = currentTemplate.type === 'singbox'
+      ? 'json'
+      : (currentTemplate.type === 'mihomo' || currentTemplate.type === 'egern' ? 'yaml' : 'conf');
+    const blob = new Blob([templateContent], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${currentTemplate.name || 'subone'}.${ext}`;
-    link.click();
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${currentTemplate.name}.${ext}`;
+    a.click();
     URL.revokeObjectURL(url);
   };
 
   const getTypeBadge = (type: string) => {
-    if (type === 'singbox') return { label: 'Sing-box', color: 'bg-[#EFF6F4] text-[#367A68] border-[#D1E5DF]' };
-    if (type === 'mihomo') return { label: 'Mihomo (Clash)', color: 'bg-[#FAF0E6] text-[#B85D38] border-[#E8D7C7]' };
-    return { label: 'Loon', color: 'bg-[#F2F0F7] text-[#635588] border-[#DDD8EB]' };
+    switch (type) {
+      case 'singbox':
+        return { label: 'Sing-box', color: 'bg-[#EFF6F4] text-[#367A68] border-[#D1E5DF]' };
+      case 'mihomo':
+        return { label: 'Mihomo (Clash)', color: 'bg-[#FAF0E6] text-[#B85D38] border-[#E8D7C7]' };
+      case 'loon':
+        return { label: 'Loon', color: 'bg-[#F2F0F7] text-[#635588] border-[#DDD8EB]' };
+      case 'quantumultx':
+        return { label: 'Quantumult X', color: 'bg-[#FDF4E7] text-[#C06014] border-[#F6DCBF]' };
+      case 'egern':
+        return { label: 'Egern', color: 'bg-[#EFF6FF] text-[#1D4ED8] border-[#BFDBFE]' };
+      case 'shadowrocket':
+        return { label: 'Shadowrocket', color: 'bg-[#F0FDF4] text-[#15803D] border-[#BBF7D0]' };
+      default:
+        return { label: type, color: 'bg-[#F3F4F6] text-[#4B5563] border-[#E5E7EB]' };
+    }
   };
 
   return (
