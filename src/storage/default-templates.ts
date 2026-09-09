@@ -209,6 +209,43 @@ dns-server = 223.5.5.5,119.29.29.29
 FINAL,🐟 漏网之鱼
 `;
 
+export const DEFAULT_QUANTUMULTX_TEMPLATE = `[general]
+excluded_routes = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 127.0.0.1/32
+dns_exclusion_list = *.local, localhost
+server_check_url = http://cp.cloudflare.com/generate_204
+
+[dns]
+server = 223.5.5.5
+server = 119.29.29.29
+
+[policy]
+
+[server_remote]
+
+[server_local]
+
+[filter_remote]
+
+[filter_local]
+final=🐟 漏网之鱼
+`;
+
+export const DEFAULT_EGERN_TEMPLATE = `general:
+  log-level: notify
+
+dns:
+  nameservers:
+    - 223.5.5.5
+    - 119.29.29.29
+
+proxies: []
+
+proxy-groups: []
+
+rules:
+  - MATCH,🐟 漏网之鱼
+`;
+
 export const INITIAL_TEMPLATES: ConfigTemplate[] = [
   {
     id: 'tpl-singbox-default',
@@ -233,6 +270,22 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     content: DEFAULT_LOON_TEMPLATE,
     isDefault: true,
     description: '适用于 Loon (iOS / macOS) 的标准配置',
+  },
+  {
+    id: 'tpl-qx-default',
+    name: 'Quantumult X 标准模版',
+    type: 'quantumultx',
+    content: DEFAULT_QUANTUMULTX_TEMPLATE,
+    isDefault: true,
+    description: '适用于 Quantumult X 客户端配置',
+  },
+  {
+    id: 'tpl-egern-default',
+    name: 'Egern 标准模版',
+    type: 'egern',
+    content: DEFAULT_EGERN_TEMPLATE,
+    isDefault: true,
+    description: '适用于 Egern 客户端 YAML 配置',
   },
 ];
 

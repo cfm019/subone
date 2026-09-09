@@ -9,6 +9,8 @@ import { applyExtractionRules } from '../core/filter/extractor.js';
 import { generateMihomoConfig } from '../core/generators/mihomo-generator.js';
 import { generateSingboxConfig } from '../core/generators/singbox-generator.js';
 import { generateLoonConfig } from '../core/generators/loon-generator.js';
+import { generateQuantumultXConfig } from '../core/generators/quantumultx-generator.js';
+import { generateEgernConfig } from '../core/generators/egern-generator.js';
 import { detectClientType, ClientType } from '../core/parser/ua-detector.js';
 import {
   parseProxyGroupsText,
@@ -1097,6 +1099,12 @@ app.post('/api/generate/preview', async (req, res) => {
     } else if (targetType === 'loon') {
       const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
       output = generateLoonConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+    } else if (targetType === 'quantumultx') {
+      const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
+      output = generateQuantumultXConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+    } else if (targetType === 'egern') {
+      const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
+      output = generateEgernConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
     }
 
     res.json({ success: true, nodeCount: nodes.length, data: output });
@@ -1162,6 +1170,22 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
       return res.send(output);
     }
 
+    if (detectedType === 'quantumultx') {
+      const expand = req.query.expand === 'true' || req.query.expand === '1' || req.query.node_list === 'true';
+      const output = generateQuantumultXConfig(templateContent, nodes, groups, rules, sources, { expandNodes: expand });
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+      return res.send(output);
+    }
+
+    if (detectedType === 'egern') {
+      const expand = req.query.expand === 'true' || req.query.expand === '1' || req.query.node_list === 'true';
+      const output = generateEgernConfig(templateContent, nodes, groups, rules, sources, { expandNodes: expand });
+      res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+      res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+      return res.send(output);
+    }
+
   } catch (err: any) {
     console.error('Subscription generation error:', err);
     res.status(500).send(`Generation error: ${err.message || err}`);
@@ -1173,10 +1197,14 @@ app.get('/s/:subToken', (req, res) => handlePrivateSubRequest(req, res));
 app.get('/s/:subToken/mihomo', (req, res) => handlePrivateSubRequest(req, res, 'mihomo'));
 app.get('/s/:subToken/singbox', (req, res) => handlePrivateSubRequest(req, res, 'singbox'));
 app.get('/s/:subToken/loon', (req, res) => handlePrivateSubRequest(req, res, 'loon'));
+app.get('/s/:subToken/qx', (req, res) => handlePrivateSubRequest(req, res, 'quantumultx'));
+app.get('/s/:subToken/quantumultx', (req, res) => handlePrivateSubRequest(req, res, 'quantumultx'));
+app.get('/s/:subToken/egern', (req, res) => handlePrivateSubRequest(req, res, 'egern'));
 app.get('/s/:subToken/:target', (req, res) => {
   const target = req.params.target;
-  if (target === 'mihomo' || target === 'singbox' || target === 'loon') {
-    return handlePrivateSubRequest(req, res, target);
+  if (target === 'mihomo' || target === 'singbox' || target === 'loon' || target === 'quantumultx' || target === 'qx' || target === 'egern') {
+    const mapped = target === 'qx' ? 'quantumultx' : target;
+    return handlePrivateSubRequest(req, res, mapped as ClientType);
   }
   return handlePrivateSubRequest(req, res);
 });

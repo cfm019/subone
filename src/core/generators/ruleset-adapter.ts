@@ -148,3 +148,19 @@ export function adaptRulesetForLoon(r: UnifiedRuleItem, idx?: number): { tag: st
     url,
   };
 }
+
+export function adaptRulesetForQuantumultX(r: UnifiedRuleItem, idx?: number): { tag: string; url: string } {
+  const tag = formatRuleTag(r, idx);
+  const url = (r.clientUrls?.quantumultx || '').trim();
+  if (url) return { tag, url };
+  const loonInfo = adaptRulesetForLoon(r, idx);
+  return { tag, url: loonInfo.url };
+}
+
+export function adaptRulesetForEgern(r: UnifiedRuleItem, idx?: number): { tag: string; url: string } {
+  const tag = formatRuleTag(r, idx);
+  const url = (r.clientUrls?.egern || '').trim();
+  if (url) return { tag, url };
+  const loonInfo = adaptRulesetForLoon(r, idx);
+  return { tag, url: loonInfo.url };
+}

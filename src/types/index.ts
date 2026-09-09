@@ -141,7 +141,7 @@ export interface ExtractionRule {
 export interface ConfigTemplate {
   id: string;
   name: string;
-  type: 'singbox' | 'mihomo' | 'loon';
+  type: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern';
   content: string;
   isDefault?: boolean;
   description?: string;
@@ -184,6 +184,8 @@ export interface UnifiedRuleItem {
     singbox?: string;
     mihomo?: string;
     loon?: string;
+    quantumultx?: string;
+    egern?: string;
   };
 }
 
@@ -220,6 +222,8 @@ export interface SubscriptionProfile {
     mihomo?: string;
     singbox?: string;
     loon?: string;
+    quantumultx?: string;
+    egern?: string;
   };
   createdAt?: string;
   updatedAt?: string;

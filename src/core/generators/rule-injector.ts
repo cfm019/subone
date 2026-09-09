@@ -4,6 +4,8 @@ import {
   adaptRulesetForSingbox,
   adaptRulesetForMihomo,
   adaptRulesetForLoon,
+  adaptRulesetForQuantumultX,
+  adaptRulesetForEgern,
   formatRuleTag,
 } from './ruleset-adapter.js';
 
@@ -1012,5 +1014,388 @@ export function injectUnifiedToLoon(
   }
 
   return result.join('\n');
+}
+
+export function isSupportedByQuantumultX(node: ProxyNode): boolean {
+  if (node.network === 'grpc') return false;
+  if (node.type === 'anytls') return true;
+  if (node.type === 'vless') return true;
+  if (node.type === 'trojan') return true;
+  if (node.type === 'ss') return true;
+  if (node.type === 'vmess') return true;
+  if (node.type === 'socks5') return true;
+  if (node.type === 'http') return true;
+  return false;
+}
+
+export function injectUnifiedToQuantumultX(
+  templateConf: string,
+  nodes: ProxyNode[],
+  proxyGroups: ProxyGroupItem[],
+  rulesList: UnifiedRuleItem[],
+  sources: SubscriptionSource[] = [],
+  options?: { expandNodes?: boolean }
+): string {
+  const expandNodes = Boolean(options?.expandNodes);
+  const lines = templateConf.split('\n');
+  const activeRules = rulesList.filter(r => r.enabled);
+  const remoteRules = activeRules.filter(r => r.kind === 'remote');
+  const localRules = activeRules.filter(r => r.kind === 'local');
+
+  const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
+    ...g,
+    proxies: g.proxies ? [...g.proxies] : undefined,
+    use: g.use ? [...g.use] : undefined,
+  }));
+
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const qxSupportedNodes = nodes.filter(isSupportedByQuantumultX);
+  const qxSupportedCustomNodes = customNodes.filter(isSupportedByQuantumultX);
+  const customNodeNames = qxSupportedCustomNodes.map(n => n.name.replace(/[=,]/g, '_'));
+  const allNodeNames = qxSupportedNodes.map(n => n.name.replace(/[=,]/g, '_'));
+
+  // 1. Build [server_remote]
+  const serverRemoteLines: string[] = [];
+  if (!expandNodes) {
+    networkSources.forEach(s => {
+      const tag = s.name.replace(/[=,]/g, '_').trim();
+      serverRemoteLines.push(`${s.url}, tag=${tag}, update-interval=24, opt-parser=true`);
+    });
+  }
+
+  // 2. Build [policy]
+  const groupLines: string[] = [];
+  effectiveGroups.forEach(grp => {
+    if (grp.type === 'direct') {
+      groupLines.push(`static=${grp.name}, direct`);
+      return;
+    }
+    if (grp.type === 'reject') {
+      groupLines.push(`static=${grp.name}, reject`);
+      return;
+    }
+
+    if (grp.filter) {
+      const cleanFilter = grp.filter.trim().replace(/^\(\?i\)/i, '').replace(/\(\?i\)/gi, '');
+      if (expandNodes) {
+        let matched: string[] = [];
+        try {
+          const reg = new RegExp(cleanFilter, 'i');
+          matched = qxSupportedNodes.filter(n => reg.test(n.name)).map(n => n.name.replace(/[=,]/g, '_'));
+        } catch {
+          matched = [];
+        }
+        const members = matched.length > 0 ? matched : ['direct'];
+        groupLines.push(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+      } else {
+        groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=${cleanFilter}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+      }
+      return;
+    }
+
+    if (grp.name === '♻️ 自动选择') {
+      if (expandNodes) {
+        const members = allNodeNames.length > 0 ? allNodeNames : ['direct'];
+        groupLines.push(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+      } else {
+        groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=.*, check-interval=300, tolerance=${grp.tolerance || 50}`);
+      }
+      return;
+    }
+
+    if (grp.name === '👉 手动选择') {
+      const members = expandNodes
+        ? (allNodeNames.length > 0 ? allNodeNames : ['direct'])
+        : ['direct', ...customNodeNames];
+      groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
+      return;
+    }
+
+    // Dedicated custom node group
+    const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+    if (cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建') {
+      const members = customNodeNames.length > 0 ? customNodeNames : ['direct'];
+      groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
+      return;
+    }
+
+    // Standard selector group
+    let proxies = grp.proxies ? [...grp.proxies] : [];
+
+    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes('⚡️ 独立节点组')) {
+      proxies.unshift('⚡️ 独立节点组');
+    }
+
+    if (grp.use && grp.use.length > 0) {
+      grp.use.forEach(u => {
+        const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+        if (cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建') {
+          if (expandNodes) {
+            customNodeNames.forEach(m => {
+              if (!proxies.includes(m)) proxies.push(m);
+            });
+          } else {
+            if (!proxies.includes('⚡️ 独立节点组')) proxies.unshift('⚡️ 独立节点组');
+          }
+        }
+      });
+    }
+
+    const validGroupNames = new Set(effectiveGroups.map(g => g.name));
+    const validNodeNames = new Set(allNodeNames);
+    proxies = proxies.map(p => {
+      const u = p.trim().toUpperCase();
+      if (u === 'DIRECT' || p.trim() === '🎯 本地直连') return 'direct';
+      if (u === 'REJECT') return 'reject';
+      return p.trim();
+    }).filter(p => {
+      if (!p || p === grp.name) return false;
+      return validGroupNames.has(p) || validNodeNames.has(p) || p === 'direct' || p === 'reject';
+    });
+
+    if (proxies.length === 0) proxies = ['direct'];
+
+    const groupType = grp.type === 'fallback' ? 'available' : (grp.type === 'load-balance' ? 'round-robin' : (grp.type === 'urltest' ? 'url-latency-benchmark' : 'static'));
+    groupLines.push(`${groupType}=${grp.name}, ${proxies.join(', ')}`);
+  });
+
+  // 3. Build [filter_remote]
+  const remoteRuleLines: string[] = [];
+  remoteRules.forEach((r, idx) => {
+    const adapted = adaptRulesetForQuantumultX(r, idx);
+    const targetGroup = resolveSafeOutbound(r.outbound, new Set(effectiveGroups.map(g => g.name)), '🚀 节点选择');
+    remoteRuleLines.push(`${adapted.url}, tag=${adapted.tag}, force-remote-group=${targetGroup}, update-interval=86400, opt-parser=false, enabled=true`);
+  });
+
+  // 4. Build [filter_local]
+  const localRuleLines: string[] = [];
+  localRules.forEach(r => {
+    const targetGroup = resolveSafeOutbound(r.outbound, new Set(effectiveGroups.map(g => g.name)), '🚀 节点选择');
+    const out = targetGroup === '🎯 本地直连' || targetGroup.toUpperCase() === 'DIRECT' ? 'direct' : (targetGroup.toUpperCase() === 'REJECT' ? 'reject' : targetGroup);
+
+    if (r.type === 'FINAL') {
+      localRuleLines.push(`final, ${out}`);
+      return;
+    }
+    let qxRuleType = 'host-suffix';
+    if (r.type === 'DOMAIN') qxRuleType = 'host';
+    else if (r.type === 'DOMAIN-SUFFIX') qxRuleType = 'host-suffix';
+    else if (r.type === 'DOMAIN-KEYWORD') qxRuleType = 'host-keyword';
+    else if (r.type === 'IP-CIDR') qxRuleType = 'ip-cidr';
+    else if (r.type === 'GEOIP') qxRuleType = 'geoip';
+
+    localRuleLines.push(`${qxRuleType}, ${r.payload.trim()}, ${out}`);
+  });
+
+  // 5. Assemble config
+  const result: string[] = [];
+  let hasHandledServerRemote = false;
+  let hasHandledPolicy = false;
+  let hasHandledFilterRemote = false;
+  let hasHandledFilterLocal = false;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const trimmed = line.trim().toLowerCase();
+
+    if (trimmed === '[server_remote]') {
+      hasHandledServerRemote = true;
+      result.push(line);
+      result.push(...serverRemoteLines);
+      continue;
+    }
+
+    if (trimmed === '[policy]') {
+      hasHandledPolicy = true;
+      result.push(line);
+      result.push(...groupLines);
+      continue;
+    }
+
+    if (trimmed === '[filter_remote]') {
+      hasHandledFilterRemote = true;
+      result.push(line);
+      result.push(...remoteRuleLines);
+      continue;
+    }
+
+    if (trimmed === '[filter_local]') {
+      hasHandledFilterLocal = true;
+      result.push(line);
+      result.push(...localRuleLines);
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  if (!hasHandledServerRemote && serverRemoteLines.length > 0) {
+    result.push('\n[server_remote]');
+    result.push(...serverRemoteLines);
+  }
+  if (!hasHandledPolicy && groupLines.length > 0) {
+    result.push('\n[policy]');
+    result.push(...groupLines);
+  }
+  if (!hasHandledFilterRemote && remoteRuleLines.length > 0) {
+    result.push('\n[filter_remote]');
+    result.push(...remoteRuleLines);
+  }
+  if (!hasHandledFilterLocal && localRuleLines.length > 0) {
+    result.push('\n[filter_local]');
+    result.push(...localRuleLines);
+  }
+
+  return result.join('\n');
+}
+
+export function injectUnifiedToEgern(
+  doc: any,
+  egernProxies: any[],
+  nodes: ProxyNode[],
+  proxyGroups: ProxyGroupItem[],
+  rulesList: UnifiedRuleItem[],
+  sources: SubscriptionSource[] = [],
+  options?: { expandNodes?: boolean }
+): any {
+  if (!doc || typeof doc !== 'object') doc = {};
+
+  doc.proxies = egernProxies;
+
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customNodeNames = customNodes.map(n => n.name);
+  const allNodeNames = nodes.map(n => n.name);
+
+  const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
+    ...g,
+    proxies: g.proxies ? [...g.proxies] : undefined,
+    use: g.use ? [...g.use] : undefined,
+  }));
+
+  const generatedGroups: any[] = [];
+  effectiveGroups.forEach(grp => {
+    if (grp.type === 'direct') {
+      generatedGroups.push({ name: grp.name, type: 'select', proxies: ['DIRECT'] });
+      return;
+    }
+    if (grp.type === 'reject') {
+      generatedGroups.push({ name: grp.name, type: 'select', proxies: ['REJECT'] });
+      return;
+    }
+
+    const groupType = grp.type === 'urltest' ? 'url-test' : (grp.type === 'load-balance' ? 'load-balance' : (grp.type || 'select'));
+
+    if (grp.filter) {
+      const cleanFilter = grp.filter.trim().replace(/^\(\?i\)/i, '').replace(/\(\?i\)/gi, '');
+      let matched: string[] = [];
+      try {
+        const reg = new RegExp(cleanFilter, 'i');
+        matched = allNodeNames.filter(n => reg.test(n));
+      } catch {
+        matched = [];
+      }
+      const proxies = matched.length > 0 ? matched : ['DIRECT'];
+      generatedGroups.push({
+        name: grp.name,
+        type: groupType,
+        url: grp.url || 'https://www.gstatic.com/generate_204',
+        interval: grp.interval || 300,
+        tolerance: grp.tolerance || 50,
+        proxies,
+      });
+      return;
+    }
+
+    if (grp.name === '♻️ 自动选择') {
+      generatedGroups.push({
+        name: grp.name,
+        type: 'url-test',
+        url: grp.url || 'https://www.gstatic.com/generate_204',
+        interval: 300,
+        tolerance: 50,
+        proxies: allNodeNames.length > 0 ? allNodeNames : ['DIRECT'],
+      });
+      return;
+    }
+
+    if (grp.name === '👉 手动选择') {
+      generatedGroups.push({
+        name: grp.name,
+        type: 'select',
+        proxies: allNodeNames.length > 0 ? allNodeNames : ['DIRECT'],
+      });
+      return;
+    }
+
+    const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+    if (cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建') {
+      generatedGroups.push({
+        name: grp.name,
+        type: 'select',
+        proxies: customNodeNames.length > 0 ? customNodeNames : ['DIRECT'],
+      });
+      return;
+    }
+
+    let proxies = grp.proxies ? [...grp.proxies] : [];
+    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes('⚡️ 独立节点组')) {
+      proxies.unshift('⚡️ 独立节点组');
+    }
+
+    if (grp.use && grp.use.length > 0) {
+      grp.use.forEach(u => {
+        const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+        if (cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建') {
+          if (options?.expandNodes) {
+            customNodeNames.forEach(m => {
+              if (!proxies.includes(m)) proxies.push(m);
+            });
+          } else {
+            if (!proxies.includes('⚡️ 独立节点组')) proxies.unshift('⚡️ 独立节点组');
+          }
+        }
+      });
+    }
+
+    const validGroupNames = new Set(effectiveGroups.map(g => g.name));
+    const validNodeNames = new Set(allNodeNames);
+    proxies = proxies.map(p => p.trim() === '🎯 本地直连' ? 'DIRECT' : p.trim()).filter(p => {
+      if (!p || p === grp.name) return false;
+      return validGroupNames.has(p) || validNodeNames.has(p) || p === 'DIRECT' || p === 'REJECT';
+    });
+
+    if (proxies.length === 0) proxies = ['DIRECT'];
+
+    generatedGroups.push({
+      name: grp.name,
+      type: groupType,
+      proxies,
+    });
+  });
+
+  doc['proxy-groups'] = generatedGroups;
+
+  // Rules
+  const activeRules = rulesList.filter(r => r.enabled);
+  const outRules: string[] = [];
+  activeRules.forEach(r => {
+    const target = resolveSafeOutbound(r.outbound, new Set(effectiveGroups.map(g => g.name)), '🚀 节点选择');
+    if (r.type === 'FINAL') {
+      outRules.push(`FINAL,${target}`);
+    } else if (r.kind === 'remote') {
+      const adapted = adaptRulesetForEgern(r);
+      outRules.push(`RULE-SET,${adapted.url},${target}`);
+    } else {
+      outRules.push(`${r.type},${r.payload.trim()},${target}`);
+    }
+  });
+
+  if (!outRules.some(r => r.startsWith('FINAL,') || r.startsWith('MATCH,'))) {
+    outRules.push('FINAL,DIRECT');
+  }
+
+  doc.rules = outRules;
+  return doc;
 }
 

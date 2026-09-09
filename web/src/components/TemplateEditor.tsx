@@ -43,7 +43,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   // New Template Modal state
   const [showNewModal, setShowNewModal] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'singbox' | 'mihomo' | 'loon'>('singbox');
+  const [newType, setNewType] = useState<'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern'>('singbox');
   const [newDesc, setNewDesc] = useState('');
 
   const currentTemplate = templates.find(t => t.id === selectedTemplateId) || templates[0];
@@ -318,6 +318,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   <option value="singbox">Sing-box (JSON 格式)</option>
                   <option value="mihomo">Mihomo / ShellCrash (YAML 格式)</option>
                   <option value="loon">Loon (MCF 格式)</option>
+                  <option value="quantumultx">Quantumult X (CONF 格式)</option>
+                  <option value="egern">Egern (YAML 格式)</option>
                 </select>
               </div>
 

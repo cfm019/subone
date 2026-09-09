@@ -1,4 +1,4 @@
-export type ClientType = 'singbox' | 'mihomo' | 'loon';
+export type ClientType = 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern';
 
 export function detectClientType(
   userAgent: string | undefined,
@@ -17,11 +17,27 @@ export function detectClientType(
     if (q === 'loon') {
       return 'loon';
     }
+    if (q === 'quantumultx' || q === 'quantumult' || q === 'qx') {
+      return 'quantumultx';
+    }
+    if (q === 'egern') {
+      return 'egern';
+    }
   }
 
   // 2. User-Agent detection
   if (!userAgent) return defaultType;
   const ua = userAgent.toLowerCase();
+
+  // Quantumult X
+  if (ua.includes('quantumult') || ua.includes('qx')) {
+    return 'quantumultx';
+  }
+
+  // Egern
+  if (ua.includes('egern')) {
+    return 'egern';
+  }
 
   // Sing-box families
   if (ua.includes('sing-box') || ua.includes('singbox') || ua.includes('sfm') || ua.includes('sfi') || ua.includes('karing')) {

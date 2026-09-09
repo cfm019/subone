@@ -66,7 +66,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [previewData, setPreviewData] = useState<{
     profile: SubscriptionProfile;
     profileName: string;
-    clientType: 'singbox' | 'mihomo' | 'loon';
+    clientType: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern';
     content: string;
     nodeCount: number;
   } | null>(null);
@@ -247,7 +247,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   // Preview Config
-  const handlePreviewProfile = async (prof: SubscriptionProfile, clientType: 'singbox' | 'mihomo' | 'loon' = 'singbox') => {
+  const handlePreviewProfile = async (prof: SubscriptionProfile, clientType: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern' = 'singbox') => {
     setPreviewLoading(true);
     setPreviewData({ profile: prof, profileName: prof.name, clientType, content: '正在生成配置...', nodeCount: 0 });
 
@@ -431,6 +431,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
             const mihomoUrl = getSubUrl(prof.token, 'mihomo');
             const singboxUrl = getSubUrl(prof.token, 'singbox');
             const loonUrl = getSubUrl(prof.token, 'loon');
+            const qxUrl = getSubUrl(prof.token, 'qx');
+            const egernUrl = getSubUrl(prof.token, 'egern');
             const groupCount = (prof.selectedGroupIds && prof.selectedGroupIds.length > 0)
               ? prof.selectedGroupIds.length
               : proxyGroupsCount;
@@ -585,6 +587,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <span>Loon (Conf)</span>
                             {copiedId === `loon-${prof.id}` && <Check className="w-3 h-3 text-[#5A7A6F]" />}
                           </button>
+                          <button
+                            onClick={() => {
+                              handleCopy(qxUrl, `qx-${prof.id}`);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-[#FAF8F5] text-[#1F1E1D] flex items-center justify-between cursor-pointer"
+                          >
+                            <span>Quantumult X (Conf)</span>
+                            {copiedId === `qx-${prof.id}` && <Check className="w-3 h-3 text-[#5A7A6F]" />}
+                          </button>
+                          <button
+                            onClick={() => {
+                              handleCopy(egernUrl, `egern-${prof.id}`);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-[#FAF8F5] text-[#1F1E1D] flex items-center justify-between cursor-pointer"
+                          >
+                            <span>Egern (YAML)</span>
+                            {copiedId === `egern-${prof.id}` && <Check className="w-3 h-3 text-[#5A7A6F]" />}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -650,6 +672,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     { type: 'singbox', label: 'Sing-box', format: 'JSON' },
                     { type: 'mihomo', label: 'Mihomo', format: 'YAML' },
                     { type: 'loon', label: 'Loon', format: 'CONF' },
+                    { type: 'quantumultx', label: 'Quantumult X', format: 'CONF' },
+                    { type: 'egern', label: 'Egern', format: 'YAML' },
                   ] as const).map(({ type, label, format }) => (
                     <button
                       key={type}
@@ -1140,6 +1164,44 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   >
                     <option value="">跟随系统默认模版</option>
                     {(config?.templates || []).filter(t => t.type === 'loon').map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} {t.isDefault ? '(系统默认)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs text-[#69655E] font-medium">Quantumult X 模版</label>
+                  <select
+                    value={profile.templates?.quantumultx || ''}
+                    onChange={e => onChangeProfile(prev => prev ? {
+                      ...prev,
+                      templates: { ...(prev.templates || {}), quantumultx: e.target.value || undefined }
+                    } : prev)}
+                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
+                  >
+                    <option value="">跟随系统默认模版</option>
+                    {(config?.templates || []).filter(t => t.type === 'quantumultx').map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} {t.isDefault ? '(系统默认)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs text-[#69655E] font-medium">Egern 模版</label>
+                  <select
+                    value={profile.templates?.egern || ''}
+                    onChange={e => onChangeProfile(prev => prev ? {
+                      ...prev,
+                      templates: { ...(prev.templates || {}), egern: e.target.value || undefined }
+                    } : prev)}
+                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
+                  >
+                    <option value="">跟随系统默认模版</option>
+                    {(config?.templates || []).filter(t => t.type === 'egern').map(t => (
                       <option key={t.id} value={t.id}>
                         {t.name} {t.isDefault ? '(系统默认)' : ''}
                       </option>
