@@ -186,7 +186,38 @@ function collectNodesFromSources(config: AppConfig): ProxyNode[] {
   return allNodes;
 }
 
+function ensureCustomProxyGroup(config: AppConfig): boolean {
+  const customSrc = config.sources?.find(s => s.id === 'custom' || s.type === 'custom');
+  if (!customSrc || !customSrc.nodes || customSrc.nodes.length === 0) return false;
+
+  if (!config.proxyGroups) config.proxyGroups = [];
+  const existingNames = new Set(config.proxyGroups.map(g => g.name.toLowerCase()));
+  const targetTag = '⚡️ 独立节点组';
+
+  if (!existingNames.has(targetTag.toLowerCase()) && !existingNames.has('独立节点组')) {
+    const customGroup: ProxyGroupItem = {
+      id: 'grp-src-custom',
+      name: targetTag,
+      type: 'select',
+      use: ['独立节点组'],
+      proxies: customSrc.nodes.map(n => n.name),
+    };
+    config.proxyGroups.push(customGroup);
+
+    const mainSelector = config.proxyGroups.find(g => g.name === '🚀 节点选择');
+    if (mainSelector) {
+      if (!mainSelector.proxies) mainSelector.proxies = [];
+      if (!mainSelector.proxies.includes(targetTag)) {
+        mainSelector.proxies.unshift(targetTag);
+      }
+    }
+    return true;
+  }
+  return false;
+}
+
 ensureCustomSource(appConfig);
+ensureCustomProxyGroup(appConfig);
 saveConfig(appConfig);
 
 // Initialize in-memory cache directly from persisted source nodes
@@ -382,6 +413,7 @@ app.post('/api/custom-nodes/import', (req, res) => {
 
   customSrc.nodeCount = customSrc.nodes.length;
   customSrc.lastUpdated = new Date().toISOString();
+  ensureCustomProxyGroup(appConfig);
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
 
@@ -405,6 +437,7 @@ app.post('/api/custom-nodes', (req, res) => {
 
   customSrc.nodes = [...(customSrc.nodes || []), newNode];
   customSrc.nodeCount = customSrc.nodes.length;
+  ensureCustomProxyGroup(appConfig);
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
 
@@ -693,17 +726,19 @@ app.post('/api/groups/generate-country-presets', (req, res) => {
   const existingNames = new Set(appConfig.proxyGroups.map(g => g.name));
   const newGroups: ProxyGroupItem[] = [];
 
-  // 1. Generate dedicated group for each active subscription source
+  // 1. Generate dedicated group for each active subscription source (including custom nodes if non-empty)
   appConfig.sources.forEach(src => {
     const srcName = (src.name || '').trim();
-    if (!srcName || src.id === 'custom' || src.type === 'custom') return;
+    if (!srcName) return;
+    if ((src.id === 'custom' || src.type === 'custom') && (!src.nodes || src.nodes.length === 0)) return;
     const groupTag = `⚡️ ${srcName}`;
     if (!existingNames.has(groupTag) && !existingNames.has(srcName)) {
       const srcGroup: ProxyGroupItem = {
         id: `grp-src-${Date.now()}-${src.id}`,
         name: groupTag,
-        type: 'urltest',
+        type: src.id === 'custom' ? 'select' : 'urltest',
         use: [srcName],
+        proxies: src.id === 'custom' ? (src.nodes || []).map(n => n.name) : undefined,
         tolerance: 50,
         interval: 300,
         url: 'https://www.gstatic.com/generate_204',

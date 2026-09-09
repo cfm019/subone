@@ -112,6 +112,8 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     interval: 300,
   });
 
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+
   const standardOutbounds = ['🚀 节点选择', '🎯 本地直连', '♻️ 自动选择', '👉 手动选择'];
   const groupOutbounds = groups.map(g => g.name);
   const sourceOutbounds = sources.filter(s => s.enabled).map(s => {
@@ -123,7 +125,22 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     ...standardOutbounds,
     ...sourceOutbounds,
     ...groupOutbounds,
+    ...(customNodes.length > 0 ? ['⚡️ 独立节点组'] : []),
   ]));
+
+  const hasCustomGroup = groups.some(g => {
+    const clean = g.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+    return clean === '独立节点组' || clean === '手工自建' || clean === 'custom';
+  });
+
+  const handleAddCustomGroup = async () => {
+    await onAddGroup({
+      name: '⚡️ 独立节点组',
+      type: 'select',
+      use: ['独立节点组'],
+      proxies: customNodes.map(n => n.name),
+    });
+  };
 
   const handleOpenAdd = () => {
     setFormData({
@@ -274,6 +291,17 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {customNodes.length > 0 && !hasCustomGroup && (
+            <button
+              onClick={handleAddCustomGroup}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#EAF2EE] text-[#2D6A5A] border border-[#D5E5DE] hover:bg-[#D5E5DE] transition-all cursor-pointer"
+              title="为当前独立节点创建独立节点组策略"
+            >
+              <Zap className="w-3.5 h-3.5" />
+              <span>新建独立节点组 ({customNodes.length})</span>
+            </button>
+          )}
+
           <button
             onClick={handleOpenYaml}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl cursor-pointer"
@@ -636,6 +664,57 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                   </div>
                 </div>
 
+                {customNodes.length > 0 && (
+                  <div className="space-y-1.5 pt-2 border-t border-[#F0ECE4]">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] text-[#78746D] font-medium flex items-center gap-1">
+                        <span>独立节点 ({customNodes.length} 个可用，点击加入当前组)：</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const names = customNodes.map(n => n.name);
+                          const current = formData.proxies || [];
+                          const allSelected = names.every(n => current.includes(n));
+                          if (allSelected) {
+                            setFormData({ ...formData, proxies: current.filter(p => !names.includes(p)) });
+                          } else {
+                            const combined = Array.from(new Set([...current, ...names]));
+                            setFormData({ ...formData, proxies: combined });
+                          }
+                        }}
+                        className="text-[10px] text-[#CC785C] hover:underline cursor-pointer"
+                      >
+                        {customNodes.every(n => (formData.proxies || []).includes(n.name)) ? '取消全选' : '全部添加'}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 max-h-36 overflow-y-auto p-1.5 bg-[#FAF8F5] rounded-xl border border-[#E8E4DC]">
+                      {customNodes.map(n => {
+                        const isSelected = (formData.proxies || []).includes(n.name);
+                        return (
+                          <button
+                            key={n.id}
+                            type="button"
+                            onClick={() => handleToggleProxy(n.name)}
+                            className={`px-2 py-1 rounded-lg text-[11px] font-medium transition-all cursor-pointer border flex items-center gap-1.5 ${isSelected
+                              ? 'bg-[#2D6A5A] text-white border-[#2D6A5A]'
+                              : 'bg-white text-[#59554E] border-[#E3DDD2] hover:border-[#2D6A5A]/60'
+                              }`}
+                            title={`${(n.type || '').toUpperCase()} - ${n.server}:${n.port}`}
+                          >
+                            <span className="text-[10px]">{n.countryEmoji || '🌐'}</span>
+                            <span className="truncate max-w-[160px]">{n.name}</span>
+                            <span className={`text-[9px] px-1 rounded uppercase font-mono font-bold ${isSelected ? 'bg-white/20 text-white' : 'bg-[#F0ECE4] text-[#59554E]'}`}>
+                              {n.type}
+                            </span>
+                            <span>{isSelected ? '✓' : '+'}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 <div className="flex items-center gap-2 pt-1">
                   <input
                     type="text"
@@ -659,20 +738,30 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                 // Deduplicate sources by normalized key
                 const sourceMap = new Map<string, { tag: string; label: string; nodeCount?: number; id: string }>();
                 sources.forEach(src => {
-                  const isInternalCustom = src.id === 'custom';
+                  const isInternalCustom = src.id === 'custom' || src.type === 'custom';
                   const label = isInternalCustom ? '独立节点组' : src.name.replace(/^[⚡️\s]+/, '');
                   const tag = `⚡️ ${label}`;
                   const key = isInternalCustom ? 'custom' : label.toLowerCase();
+                  const count = isInternalCustom ? customNodes.length : (src.nodeCount || src.nodes?.length || 0);
 
-                  if (!sourceMap.has(key) || (src.nodeCount || 0) > (sourceMap.get(key)!.nodeCount || 0)) {
+                  if (!sourceMap.has(key) || (count || 0) > (sourceMap.get(key)!.nodeCount || 0)) {
                     sourceMap.set(key, {
                       id: src.id,
                       tag,
                       label,
-                      nodeCount: src.nodeCount || src.nodes?.length || 0,
+                      nodeCount: count,
                     });
                   }
                 });
+
+                if (customNodes.length > 0 && !sourceMap.has('custom')) {
+                  sourceMap.set('custom', {
+                    id: 'custom',
+                    tag: '⚡️ 独立节点组',
+                    label: '独立节点组',
+                    nodeCount: customNodes.length,
+                  });
+                }
 
                 const uniqueSourceList = Array.from(sourceMap.values());
                 if (uniqueSourceList.length === 0) return null;
