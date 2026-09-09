@@ -1,4 +1,4 @@
-export type ClientType = 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern';
+export type ClientType = 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern' | 'shadowrocket';
 
 export function detectClientType(
   userAgent: string | undefined,
@@ -23,11 +23,19 @@ export function detectClientType(
     if (q === 'egern') {
       return 'egern';
     }
+    if (q === 'shadowrocket' || q === 'rocket') {
+      return 'shadowrocket';
+    }
   }
 
   // 2. User-Agent detection
   if (!userAgent) return defaultType;
   const ua = userAgent.toLowerCase();
+
+  // Shadowrocket
+  if (ua.includes('shadowrocket')) {
+    return 'shadowrocket';
+  }
 
   // Quantumult X
   if (ua.includes('quantumult') || ua.includes('qx')) {

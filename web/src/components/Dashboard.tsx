@@ -66,7 +66,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [previewData, setPreviewData] = useState<{
     profile: SubscriptionProfile;
     profileName: string;
-    clientType: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern';
+    clientType: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern' | 'shadowrocket';
     content: string;
     nodeCount: number;
   } | null>(null);
@@ -247,7 +247,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   };
 
   // Preview Config
-  const handlePreviewProfile = async (prof: SubscriptionProfile, clientType: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern' = 'singbox') => {
+  const handlePreviewProfile = async (prof: SubscriptionProfile, clientType: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern' | 'shadowrocket' = 'singbox') => {
     setPreviewLoading(true);
     setPreviewData({ profile: prof, profileName: prof.name, clientType, content: '正在生成配置...', nodeCount: 0 });
 
@@ -433,6 +433,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
             const loonUrl = getSubUrl(prof.token, 'loon');
             const qxUrl = getSubUrl(prof.token, 'qx');
             const egernUrl = getSubUrl(prof.token, 'egern');
+            const shadowrocketUrl = getSubUrl(prof.token, 'shadowrocket');
             const groupCount = (prof.selectedGroupIds && prof.selectedGroupIds.length > 0)
               ? prof.selectedGroupIds.length
               : proxyGroupsCount;
@@ -607,6 +608,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <span>Egern (YAML)</span>
                             {copiedId === `egern-${prof.id}` && <Check className="w-3 h-3 text-[#5A7A6F]" />}
                           </button>
+                          <button
+                            onClick={() => {
+                              handleCopy(shadowrocketUrl, `shadowrocket-${prof.id}`);
+                              setOpenDropdownId(null);
+                            }}
+                            className="w-full text-left px-3 py-1.5 hover:bg-[#FAF8F5] text-[#1F1E1D] flex items-center justify-between cursor-pointer"
+                          >
+                            <span>小火箭 (Shadowrocket)</span>
+                            {copiedId === `shadowrocket-${prof.id}` && <Check className="w-3 h-3 text-[#5A7A6F]" />}
+                          </button>
                         </div>
                       )}
                     </div>
@@ -674,6 +685,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     { type: 'loon', label: 'Loon', format: 'CONF' },
                     { type: 'quantumultx', label: 'Quantumult X', format: 'CONF' },
                     { type: 'egern', label: 'Egern', format: 'YAML' },
+                    { type: 'shadowrocket', label: '小火箭', format: 'CONF' },
                   ] as const).map(({ type, label, format }) => (
                     <button
                       key={type}
@@ -1202,6 +1214,25 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   >
                     <option value="">跟随系统默认模版</option>
                     {(config?.templates || []).filter(t => t.type === 'egern').map(t => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} {t.isDefault ? '(系统默认)' : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs text-[#69655E] font-medium">Shadowrocket 模版</label>
+                  <select
+                    value={profile.templates?.shadowrocket || ''}
+                    onChange={e => onChangeProfile(prev => prev ? {
+                      ...prev,
+                      templates: { ...(prev.templates || {}), shadowrocket: e.target.value || undefined }
+                    } : prev)}
+                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
+                  >
+                    <option value="">跟随系统默认模版</option>
+                    {(config?.templates || []).filter(t => t.type === 'shadowrocket').map(t => (
                       <option key={t.id} value={t.id}>
                         {t.name} {t.isDefault ? '(系统默认)' : ''}
                       </option>

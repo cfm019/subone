@@ -164,3 +164,12 @@ export function adaptRulesetForEgern(r: UnifiedRuleItem, idx?: number): { tag: s
   const loonInfo = adaptRulesetForLoon(r, idx);
   return { tag, url: loonInfo.url };
 }
+
+export function adaptRulesetForShadowrocket(r: UnifiedRuleItem, idx?: number): { tag: string; url: string } {
+  const tag = formatRuleTag(r, idx);
+  const url = (r.clientUrls?.shadowrocket || '').trim();
+  if (url) return { tag, url };
+  const loonInfo = adaptRulesetForLoon(r, idx);
+  return { tag, url: loonInfo.url };
+}
+

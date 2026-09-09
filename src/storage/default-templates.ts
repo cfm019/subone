@@ -246,6 +246,26 @@ rules:
   - MATCH,🐟 漏网之鱼
 `;
 
+export const DEFAULT_SHADOWROCKET_TEMPLATE = `[General]
+bypass-system = true
+skip-proxy = 192.168.0.0/16, 10.0.0.0/8, 172.16.0.0/12, 127.0.0.1/32, localhost, *.local
+bypass-tun = 10.0.0.0/8, 100.64.0.0/10, 127.0.0.0/8, 169.254.0.0/16, 172.16.0.0/12, 192.0.0.0/24, 192.0.2.0/24, 192.88.99.0/24, 192.168.0.0/16, 198.18.0.0/15, 198.51.100.0/24, 203.0.113.0/24, 224.0.0.0/4, 255.255.255.255/32
+dns-server = system, 223.5.5.5, 119.29.29.29
+ipv6 = false
+
+[Rule]
+FINAL,🐟 漏网之鱼
+
+[Host]
+localhost = 127.0.0.1
+
+[URL Rewrite]
+
+[Proxy]
+
+[Proxy Group]
+`;
+
 export const INITIAL_TEMPLATES: ConfigTemplate[] = [
   {
     id: 'tpl-singbox-default',
@@ -286,6 +306,14 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     content: DEFAULT_EGERN_TEMPLATE,
     isDefault: true,
     description: '适用于 Egern 客户端 YAML 配置',
+  },
+  {
+    id: 'tpl-shadowrocket-default',
+    name: 'Shadowrocket 标准模版',
+    type: 'shadowrocket',
+    content: DEFAULT_SHADOWROCKET_TEMPLATE,
+    isDefault: true,
+    description: '适用于 Shadowrocket (小火箭) 客户端配置',
   },
 ];
 

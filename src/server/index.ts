@@ -11,6 +11,7 @@ import { generateSingboxConfig } from '../core/generators/singbox-generator.js';
 import { generateLoonConfig } from '../core/generators/loon-generator.js';
 import { generateQuantumultXConfig } from '../core/generators/quantumultx-generator.js';
 import { generateEgernConfig } from '../core/generators/egern-generator.js';
+import { generateShadowrocketConfig, generateShadowrocketBase64 } from '../core/generators/shadowrocket-generator.js';
 import { detectClientType, ClientType } from '../core/parser/ua-detector.js';
 import {
   parseProxyGroupsText,
@@ -1105,6 +1106,14 @@ app.post('/api/generate/preview', async (req, res) => {
     } else if (targetType === 'egern') {
       const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
       output = generateEgernConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+    } else if (targetType === 'shadowrocket') {
+      const isBase64 = req.body?.format === 'base64' || req.query?.format === 'base64';
+      if (isBase64) {
+        output = generateShadowrocketBase64(nodes);
+      } else {
+        const expand = req.body?.expandNodes !== false;
+        output = generateShadowrocketConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+      }
     }
 
     res.json({ success: true, nodeCount: nodes.length, data: output });
@@ -1186,6 +1195,21 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
       return res.send(output);
     }
 
+    if (detectedType === 'shadowrocket') {
+      const isBase64 = req.query.format === 'base64' || req.query.format === 'b64';
+      if (isBase64) {
+        const output = generateShadowrocketBase64(nodes);
+        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+        res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+        return res.send(output);
+      }
+      const expand = req.query.expand !== 'false' && req.query.expand !== '0';
+      const output = generateShadowrocketConfig(templateContent, nodes, groups, rules, sources, { expandNodes: expand });
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+      return res.send(output);
+    }
+
   } catch (err: any) {
     console.error('Subscription generation error:', err);
     res.status(500).send(`Generation error: ${err.message || err}`);
@@ -1200,10 +1224,21 @@ app.get('/s/:subToken/loon', (req, res) => handlePrivateSubRequest(req, res, 'lo
 app.get('/s/:subToken/qx', (req, res) => handlePrivateSubRequest(req, res, 'quantumultx'));
 app.get('/s/:subToken/quantumultx', (req, res) => handlePrivateSubRequest(req, res, 'quantumultx'));
 app.get('/s/:subToken/egern', (req, res) => handlePrivateSubRequest(req, res, 'egern'));
+app.get('/s/:subToken/shadowrocket', (req, res) => handlePrivateSubRequest(req, res, 'shadowrocket'));
+app.get('/s/:subToken/rocket', (req, res) => handlePrivateSubRequest(req, res, 'shadowrocket'));
 app.get('/s/:subToken/:target', (req, res) => {
   const target = req.params.target;
-  if (target === 'mihomo' || target === 'singbox' || target === 'loon' || target === 'quantumultx' || target === 'qx' || target === 'egern') {
-    const mapped = target === 'qx' ? 'quantumultx' : target;
+  if (
+    target === 'mihomo' ||
+    target === 'singbox' ||
+    target === 'loon' ||
+    target === 'quantumultx' ||
+    target === 'qx' ||
+    target === 'egern' ||
+    target === 'shadowrocket' ||
+    target === 'rocket'
+  ) {
+    const mapped = target === 'qx' ? 'quantumultx' : (target === 'rocket' ? 'shadowrocket' : target);
     return handlePrivateSubRequest(req, res, mapped as ClientType);
   }
   return handlePrivateSubRequest(req, res);

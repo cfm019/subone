@@ -6,6 +6,7 @@ import {
   adaptRulesetForLoon,
   adaptRulesetForQuantumultX,
   adaptRulesetForEgern,
+  adaptRulesetForShadowrocket,
   formatRuleTag,
 } from './ruleset-adapter.js';
 
@@ -1398,4 +1399,192 @@ export function injectUnifiedToEgern(
   doc.rules = outRules;
   return doc;
 }
+
+export function injectUnifiedToShadowrocket(
+  templateConf: string,
+  nodes: ProxyNode[],
+  proxyGroups: ProxyGroupItem[],
+  rulesList: UnifiedRuleItem[],
+  sources: SubscriptionSource[] = [],
+  options?: { expandNodes?: boolean }
+): string {
+  const expandNodes = Boolean(options?.expandNodes);
+  const lines = templateConf.split('\n');
+  const activeRules = rulesList.filter(r => r.enabled);
+  const remoteRules = activeRules.filter(r => r.kind === 'remote');
+  const localRules = activeRules.filter(r => r.kind === 'local');
+
+  const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
+    ...g,
+    proxies: g.proxies ? [...g.proxies] : undefined,
+    use: g.use ? [...g.use] : undefined,
+  }));
+
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customNodeNames = customNodes.map(n => n.name.replace(/[=,]/g, '_'));
+  const allNodeNames = nodes.map(n => n.name.replace(/[=,]/g, '_'));
+
+  // 1. Build [Proxy Group]
+  const groupLines: string[] = [];
+  const existingGroupNames = new Set<string>();
+
+  effectiveGroups.forEach(grp => {
+    existingGroupNames.add(grp.name.toLowerCase());
+    let members: string[] = [];
+
+    if (grp.use && grp.use.length > 0) {
+      grp.use.forEach(u => {
+        if (u === '独立节点组' || u === 'custom') {
+          members.push(...customNodeNames);
+        } else {
+          const matchedSrc = networkSources.find(s => s.name === u || s.id === u);
+          if (matchedSrc) {
+            if (expandNodes) {
+              const srcNodes = nodes
+                .filter(n => n.sourceName === matchedSrc.name || n.sourceId === matchedSrc.id)
+                .map(n => n.name.replace(/[=,]/g, '_'));
+              members.push(...srcNodes);
+            } else {
+              const sTag = matchedSrc.name.replace(/[=,]/g, '_').trim();
+              members.push(sTag.startsWith('⚡️') ? sTag : `⚡️ ${sTag}`);
+            }
+          }
+        }
+      });
+    }
+
+    if (grp.proxies && grp.proxies.length > 0) {
+      grp.proxies.forEach(p => {
+        if (p === 'DIRECT' || p === '🎯 本地直连') {
+          members.push('DIRECT');
+        } else if (p === 'REJECT' || p === '🛑 广告拦截' || p === '🛑 全局拦截') {
+          members.push('REJECT');
+        } else {
+          members.push(p.replace(/[=,]/g, '_'));
+        }
+      });
+    }
+
+    if (grp.filter) {
+      try {
+        const reg = new RegExp(grp.filter, 'i');
+        const matched = nodes
+          .filter(n => reg.test(n.name))
+          .map(n => n.name.replace(/[=,]/g, '_'));
+        members.push(...matched);
+      } catch (e) {
+        // ignore regex error
+      }
+    }
+
+    members = Array.from(new Set(members)).filter(Boolean);
+
+    if (members.length === 0) {
+      if (allNodeNames.length > 0) {
+        members.push(allNodeNames[0]);
+      } else {
+        members.push('DIRECT');
+      }
+    }
+
+    const grpType = grp.type === 'urltest' ? 'url-test' : (grp.type === 'fallback' ? 'fallback' : 'select');
+    if (grpType === 'url-test') {
+      groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=${grp.url || 'http://cp.cloudflare.com/generate_204'}, interval=${grp.interval || 300}, tolerance=${grp.tolerance || 50}`);
+    } else if (grpType === 'fallback') {
+      groupLines.push(`${grp.name} = fallback, ${members.join(', ')}, url=${grp.url || 'http://cp.cloudflare.com/generate_204'}, interval=${grp.interval || 300}`);
+    } else {
+      groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
+    }
+  });
+
+  if (customNodes.length > 0 && !existingGroupNames.has('⚡️ 独立节点组') && !existingGroupNames.has('独立节点组')) {
+    groupLines.push(`⚡️ 独立节点组 = select, ${customNodeNames.join(', ')}`);
+  }
+
+  // 2. Build [Rule]
+  const availableGroupNames = new Set(proxyGroups.map(g => g.name));
+  const fallbackGroup = proxyGroups.find(g => g.name === '🚀 节点选择')?.name || proxyGroups[0]?.name || 'DIRECT';
+
+  const ruleLines: string[] = [];
+
+  remoteRules.forEach((r, idx) => {
+    const adapted = adaptRulesetForShadowrocket(r, idx);
+    const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
+    ruleLines.push(`RULE-SET,${adapted.url},${safeOutbound}`);
+  });
+
+  localRules.forEach(r => {
+    if (r.type === 'FINAL') {
+      return;
+    }
+    const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
+    const payloads = r.payload.split(/[,;\n]+/).map(p => p.trim()).filter(Boolean);
+    payloads.forEach(p => {
+      if (r.type === 'IP-CIDR') {
+        ruleLines.push(`IP-CIDR,${p},${safeOutbound},no-resolve`);
+      } else {
+        ruleLines.push(`${r.type},${p},${safeOutbound}`);
+      }
+    });
+  });
+
+  const finalRule = activeRules.find(r => r.type === 'FINAL');
+  const finalOutbound = finalRule
+    ? resolveSafeOutbound(finalRule.outbound, availableGroupNames, fallbackGroup)
+    : (availableGroupNames.has('🐟 漏网之鱼') ? '🐟 漏网之鱼' : fallbackGroup);
+  ruleLines.push(`FINAL,${finalOutbound}`);
+
+  const result: string[] = [];
+  let inRuleSection = false;
+  let hasHandledRule = false;
+  let inGroupSection = false;
+  let hasHandledGroup = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed === '[Rule]') {
+      inRuleSection = true;
+      hasHandledRule = true;
+      result.push(line);
+      result.push(...ruleLines);
+      continue;
+    }
+
+    if (trimmed === '[Proxy Group]') {
+      inGroupSection = true;
+      hasHandledGroup = true;
+      result.push(line);
+      result.push(...groupLines);
+      continue;
+    }
+
+    if (inRuleSection && trimmed.startsWith('[')) {
+      inRuleSection = false;
+    }
+    if (inGroupSection && trimmed.startsWith('[')) {
+      inGroupSection = false;
+    }
+
+    if (inRuleSection || inGroupSection) {
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  if (!hasHandledGroup && groupLines.length > 0) {
+    result.push('\n[Proxy Group]');
+    result.push(...groupLines);
+  }
+
+  if (!hasHandledRule && ruleLines.length > 0) {
+    result.push('\n[Rule]');
+    result.push(...ruleLines);
+  }
+
+  return result.join('\n');
+}
+
 

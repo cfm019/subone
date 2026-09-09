@@ -41,10 +41,12 @@ export interface ExtractionRule {
   };
 }
 
+export type ClientType = 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern' | 'shadowrocket';
+
 export interface ConfigTemplate {
   id: string;
   name: string;
-  type: 'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern';
+  type: ClientType;
   content: string;
   isDefault?: boolean;
   description?: string;
@@ -89,6 +91,7 @@ export interface UnifiedRuleItem {
     loon?: string;
     quantumultx?: string;
     egern?: string;
+    shadowrocket?: string;
   };
 }
 
@@ -127,6 +130,7 @@ export interface SubscriptionProfile {
     loon?: string;
     quantumultx?: string;
     egern?: string;
+    shadowrocket?: string;
   };
   createdAt?: string;
   updatedAt?: string;

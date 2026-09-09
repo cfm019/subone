@@ -1,28 +1,27 @@
 # SubOne
 
-多节点聚合和多订阅聚合，维护分组策略和自定义分流规则、生成统一配置下发，支持 Sing-box、Mihomo 与 Loon。
+多节点与多订阅聚合服务，支持维护策略组与自定义分流规则、渲染模版生成各客户端配置并下发。兼容 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
 
 
-## ✨ 主要特性
+## 主要特性
 
-- **多订阅分流配置（多 Profile）**：
-  - 支持创建多个独立订阅，每个订阅拥有独立的 Token 链接；
-  - 每个订阅可包含源自多个机场的节点、启用的策略组、分流规则以及配置模版；
-- **多机场与多节点聚合**：
-  - 支持导入机场订阅，提取其中的节点，根据地区或者关键字进行筛选分组；
-  - 支持添加零散的节点，支持单条/批量 URI、Clash YAML、Sing-box JSON 格式录入与智能解析；
-- **协议与支持**：
-  - **支持导入解析**：VLESS (Reality/Vision/gRPC/WS)、VMess、Shadowsocks (SS 2022/AEAD)、Trojan、Hysteria 2、TUIC v5、AnyTLS、WireGuard、Snell (v1~v4)、SOCKS5、HTTP、v2rayn 等协议。
-  - **支持输入格式**：URI 链接列表、Base64 订阅、Clash/Mihomo YAML、Sing-box JSON。
-- **策略组**：
-  - 所见即所得的策略组配置，支持节点筛选、多级嵌套；
-- **分流规则**：
+- **多订阅配置（Profile）**：
+  - 支持创建多个独立订阅，各拥有独立 Token 链接；
+  - 每个订阅可按需勾选关联机场源节点、自选策略组、分流规则及专属配置模版；
+- **节点与订阅聚合**：
+  - 支持导入各类机场订阅，提取节点并按地区或关键字筛选分组；
+  - 支持添加自建独立节点，支持单条/批量 URI、Clash YAML、Sing-box JSON 格式录入与智能解析；
+- **协议与传输支持**：
+  - **支持导入解析**：VLESS (Reality/Vision/gRPC/WS)、VMess、Shadowsocks (SS 2022/AEAD)、Trojan、Hysteria 2、TUIC v5、AnyTLS、WireGuard、Snell (v1~v4)、SOCKS5、HTTP、v2rayn 等协议；
+  - **支持输入格式**：URI 链接列表、Base64 订阅、Clash/Mihomo YAML、Sing-box JSON；
+- **策略组与分流规则**：
+  - 策略组支持 select、url-test、fallback 等类型，支持节点按正则过滤与多级嵌套；
   - 本地规则：CIDR、DOMAIN、DOMAIN-SUFFIX、DOMAIN-KEYWORD 等；
-  - 远程规则集：GeoSite / GeoIP / SRS / MRS 规则集统一管理与去向分流；
-- **模板与智能下发**：
-  - 默认提供 Sing-box、Mihomo 与 Loon 的标准模版
-  - 可以自定义模版，加入自己需要的策略
-  - 根据客户端 User-Agent 智能下发对应格式，无 UA 时默认下发 Sing-box 格式，亦可通过 URL 显式指定。
+  - 远程规则集：GeoSite / GeoIP / SRS / MRS 统一管理与去向分流；
+- **模版与客户端分发**：
+  - 支持 **Sing-box**、**Mihomo (Clash)**、**Loon**、**Quantumult X**、**Egern**、**Shadowrocket** 6 类客户端；
+  - 默认提供各客户端规范模版，支持自定义模版扩展；
+  - 根据客户端 User-Agent 智能识别分发，亦可通过路径或参数显式获取对应格式或 Base64 纯节点列表。
 
 
 ## 环境要求
@@ -125,37 +124,58 @@ sub.yourdomain.com {
 caddy reload
 ```
 
-## 💡 自定义模版
+## 订阅端点与格式分发
 
-Subone 支持自定义模版。在 `docs/` 目录下提供了两份实际应用的 **"保持ipv6可用（nas直连）又能防止ipv6泄露"** 的 Sing-box 模版供参考。
+每个订阅配置（Profile）拥有独立的访问 Token，可通过下列路径或请求头获取对应格式：
 
-| 模版 | 适用环境 | 模版文件 | 特征 |
-| :--- | :--- | :--- | :--- |
-| **客户端模版** | macOS、iOS、Windows、Android 终端设备 | [docs/singbox-client-template.json](docs/singbox-client-template.json) | 排除私网/Tailscale网段防回环、监听回环端口、防漏 |
-| **旁路由模版** | 软路由、Linux 透明网关 | [docs/singbox-gateway-template.json](docs/singbox-gateway-template.json) | `auto_redirect` 自动劫持转发、DNS 入站接管 |
+| 客户端 / 场景 | 专用订阅路径 | 输出格式与说明 |
+| :--- | :--- | :--- |
+| **智能分发** | `/s/:token` | 根据请求头 `User-Agent` 自动识别客户端并分发匹配格式 |
+| **Sing-box** | `/s/:token/singbox` | JSON 配置 (包含 DNS、Tun、入站、出站及路由分流) |
+| **Mihomo (Clash)** | `/s/:token/mihomo` | YAML 配置 (包含 proxies、proxy-groups、rules) |
+| **Loon** | `/s/:token/loon` | CONF 配置 (包含 [Proxy]、[Proxy Group]、[Rule]) |
+| **Quantumult X** | `/s/:token/qx` 或 `/s/:token/quantumultx` | CONF 配置 (包含 [server_local]、[policy]、[filter_local]) |
+| **Egern** | `/s/:token/egern` | YAML 配置 (包含 proxies、proxy-groups、rules) |
+| **Shadowrocket** | `/s/:token/shadowrocket` 或 `/s/:token/rocket` | CONF 配置 (包含 [Proxy]、[Proxy Group]、[Rule]) |
+| **纯节点列表** | `/s/:token/shadowrocket?format=base64` | Base64 编码的节点 URI 列表 |
+
+> 提示：亦可在任意订阅路径后附加 `?target=xxx` 显式覆盖客户端类型（例如 `?target=mihomo`、`?target=qx`、`?target=egern`）。
+
+
+## 模版示例与参考
+
+Subone 支持为各个客户端自定义基础模版。在 `docs/` 目录下提供了各类客户端的标准基础模版及针对特定场景调优的参考配置：
+
+| 模版文件 | 目标客户端 | 适用场景与特征 |
+| :--- | :--- | :--- |
+| [docs/singbox-client-template.json](docs/singbox-client-template.json) | Sing-box | macOS/iOS 终端设备，配置 Tun 排除私网/Tailscale防回环、防IPv6泄漏 |
+| [docs/singbox-gateway-template.json](docs/singbox-gateway-template.json) | Sing-box | 软路由/Linux 旁路由透明网关，`auto_redirect` 自动流量与 DNS 接管 |
+| [docs/mihomo-template.yaml](docs/mihomo-template.yaml) | Mihomo / Clash | 标准 YAML 基础模版，Fake-IP DNS 设置与出站占位 |
+| [docs/loon-template.conf](docs/loon-template.conf) | Loon | 标准 CONF 基础模版，包含 [Proxy]、[Proxy Group]、[Rule] 占位 |
+| [docs/quantumultx-template.conf](docs/quantumultx-template.conf) | Quantumult X | 标准 CONF 基础模版，包含 [server_local]、[policy]、[filter_local] 占位 |
+| [docs/egern-template.yaml](docs/egern-template.yaml) | Egern | 标准 YAML 基础模版，支持 Hysteria 2、VLESS Reality 等协议 |
+| [docs/shadowrocket-template.conf](docs/shadowrocket-template.conf) | Shadowrocket | 标准 CONF 基础模版，支持全协议单行定义与规则集注入 |
 
 ---
 
-### 1. 终端客户端（macOS / iOS 等）要点
+### Sing-box 场景调优要点
 
+#### 1. 终端客户端（macOS / iOS 等）
 - **排除局域网与虚拟内网 (`route_exclude_address`)**：
-  - 显式排除了 RFC 1918 私网网段（`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`）以及运营商 CGNAT / Tailscale 网段（`100.64.0.0/10`, `100.100.100.100/32`, `fd7a:115c:a1e0::/48`）。
+  - 显式排除 RFC 1918 私网网段（`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`）以及运营商 CGNAT / Tailscale 网段（`100.64.0.0/10`, `100.100.100.100/32`, `fd7a:115c:a1e0::/48`）。
   - 确保 AirDrop、随航（Sidecar）、群晖 NAS 以及 Tailscale 内网穿透流量不会误入 TUN，避免客户端路由回环与连接挂死。
 
----
-
-### 2. 旁路由（透明网关）要点
-
+#### 2. 旁路由（透明网关）
 - **启用 `auto_redirect: true`**：
   - Sing-box TUN 模式旁路由转发的核心参数。开启后，Sing-box 会自动在底层（iptables/nftables PREROUTING 链）注入规则，接管局域网其他设备转发过来的流量进入 TUN。
 - **DNS 劫持与接入 (`dns-in: 1053` + `hijack-dns`)**：
   - 配置 `dns-in` 直连入站（监听在 `127.0.0.1:1053`），并在路由规则中通过 `action: "hijack-dns"` 劫持 53 与 1053 端口。
   - 若系统搭配使用 AdGuard Home、MosDNS 或 dnsmasq，可将它们的上游 DNS 指向 `127.0.0.1:1053`，以使用 Sing-box 的 FakeIP 与分流能力。
 - **阻断 QUIC、IPv6 (AAAA) 与 STUN**：
-  - **QUIC / HTTP3 拦截**：由于 UDP 443 协议常导致梯子限速或连接不稳定，这里配置全局 Reject QUIC，强制降级至 TCP/TLS 代理。
+  - **QUIC / HTTP3 拦截**：由于 UDP 443 协议常导致节点限速或连接不稳定，模版中配置 Reject QUIC，强制降级至 TCP/TLS。
   - **AAAA 拦截 (`query_type: AAAA -> reject`)**：防止双栈环境下客户端通过未受控的 IPv6 出口直连导致分流失效。
   - **STUN 拦截 (853/STUN -> reject)**：防止部分 WebRTC / 穿透协议探测导致真实公网 IP 泄漏。
 - **局域网私网段与 NAS 直连**：
-  - 明确将私网网段（`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fd00::/8` 等）以及局域网常用域名（如 Synology、QNAP 等私有 NAS DDNS 域名）匹配至 `🎯 本地直连`，保障内网设备互访不受代理干扰。
+  - 明确将私网网段（`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fd00::/8` 等）以及局域网常用域名（如 Synology、QNAP 等私有 NAS DDNS 域名）匹配至直连策略，保障内网设备互访不受代理干扰。
 
 

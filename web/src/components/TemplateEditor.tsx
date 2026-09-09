@@ -13,7 +13,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { ConfigTemplate } from '../types';
+import { ConfigTemplate, ClientType } from '../types';
 
 interface TemplateEditorProps {
   templates: ConfigTemplate[];
@@ -43,7 +43,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   // New Template Modal state
   const [showNewModal, setShowNewModal] = useState(false);
   const [newName, setNewName] = useState('');
-  const [newType, setNewType] = useState<'singbox' | 'mihomo' | 'loon' | 'quantumultx' | 'egern'>('singbox');
+  const [newType, setNewType] = useState<ClientType>('singbox');
   const [newDesc, setNewDesc] = useState('');
 
   const currentTemplate = templates.find(t => t.id === selectedTemplateId) || templates[0];
@@ -320,6 +320,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
                   <option value="loon">Loon (MCF 格式)</option>
                   <option value="quantumultx">Quantumult X (CONF 格式)</option>
                   <option value="egern">Egern (YAML 格式)</option>
+                  <option value="shadowrocket">Shadowrocket (CONF 格式)</option>
                 </select>
               </div>
 
