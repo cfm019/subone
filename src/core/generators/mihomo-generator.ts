@@ -47,10 +47,18 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
           path: node.wsPath,
           headers: node.wsHeaders || {},
         };
+        if (node.maxEarlyData) base['ws-opts']['max-early-data'] = node.maxEarlyData;
+        if (node.earlyDataHeaderName) base['ws-opts']['early-data-header-name'] = node.earlyDataHeaderName;
       }
       if (node.network === 'grpc' && node.grpcServiceName) {
         base['grpc-opts'] = {
           'grpc-service-name': node.grpcServiceName,
+        };
+      }
+      if (node.network === 'http' || node.network === 'h2') {
+        base['h2-opts'] = {
+          host: node.sni ? [node.sni] : [],
+          path: node.wsPath || '/',
         };
       }
     }
@@ -72,6 +80,8 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
           path: node.wsPath,
           headers: node.wsHeaders || {},
         };
+        if (node.maxEarlyData) base['ws-opts']['max-early-data'] = node.maxEarlyData;
+        if (node.earlyDataHeaderName) base['ws-opts']['early-data-header-name'] = node.earlyDataHeaderName;
       }
     }
     return base;
@@ -82,6 +92,8 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     base.tls = true;
     if (node.sni) base.servername = node.sni;
     if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
+    if (node.alpn) base.alpn = node.alpn;
+    if (node.skipCertVerify) base['skip-cert-verify'] = true;
     if (node.network) {
       base.network = node.network;
       if (node.network === 'ws' && node.wsPath) {
@@ -98,10 +110,44 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     base.password = node.password;
     base.tls = true;
     if (node.sni) base.sni = node.sni;
+    if (node.serverPorts && node.serverPorts.length > 0) {
+      base.ports = node.serverPorts.join(',');
+    }
+    if (node.hopInterval) base['hop-interval'] = node.hopInterval;
+    if (node.upMbps) base.up = `${node.upMbps} Mbps`;
+    if (node.downMbps) base.down = `${node.downMbps} Mbps`;
+    if (node.alpn) base.alpn = node.alpn;
+    if (node.skipCertVerify) base['skip-cert-verify'] = true;
+    if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
     if (node.obfs) {
       base.obfs = node.obfs;
       base['obfs-password'] = node.obfsPassword;
     }
+    return base;
+  }
+
+  if (node.type === 'tuic') {
+    base.uuid = node.uuid || node.password;
+    base.password = node.password;
+    base.tls = true;
+    if (node.sni) base.sni = node.sni;
+    if (node.alpn) base.alpn = node.alpn;
+    if (node.quicCongestionControl) base['congestion-controller'] = node.quicCongestionControl;
+    if (node.udpRelayMode) base['udp-relay-mode'] = node.udpRelayMode;
+    if (node.heartbeat) base['heartbeat-interval'] = node.heartbeat;
+    if (node.zeroRttHandshake !== undefined) base['reduce-rtt'] = node.zeroRttHandshake;
+    if (node.skipCertVerify) base['skip-cert-verify'] = true;
+    return base;
+  }
+
+  if (node.type === 'naive') {
+    base.username = node.username;
+    base.password = node.password;
+    base.sni = node.sni;
+    if (node.quic) {
+      base.quic = true;
+    }
+    if (node.skipCertVerify) base['skip-cert-verify'] = true;
     return base;
   }
 
@@ -136,6 +182,7 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     if (node.alpn) base.alpn = node.alpn;
     if (node.skipCertVerify) base['skip-cert-verify'] = true;
     if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
+    if (node.idleSessionTimeout) base['idle-session-timeout'] = node.idleSessionTimeout;
     return base;
   }
 

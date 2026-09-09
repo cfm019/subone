@@ -82,9 +82,22 @@ export function parseClashYaml(
         flow: p.flow,
         packetEncoding: p['packet-encoding'],
         network: p.network,
-        wsPath: p['ws-opts']?.path || p['ws-path'],
+        wsPath: p['ws-opts']?.path || p['ws-path'] || p['h2-opts']?.path,
         wsHeaders: p['ws-opts']?.headers || p['ws-headers'],
         grpcServiceName: p['grpc-opts']?.['grpc-service-name'],
+        maxEarlyData: p['ws-opts']?.['max-early-data'],
+        earlyDataHeaderName: p['ws-opts']?.['early-data-header-name'],
+
+        serverPorts: p.ports ? (Array.isArray(p.ports) ? p.ports.map(String) : String(p.ports).split(',').map(s => s.trim())) : undefined,
+        hopInterval: p['hop-interval'] ? String(p['hop-interval']) : undefined,
+        upMbps: p.up ? parseInt(String(p.up), 10) : undefined,
+        downMbps: p.down ? parseInt(String(p.down), 10) : undefined,
+
+        quicCongestionControl: p['congestion-controller'],
+        udpRelayMode: p['udp-relay-mode'],
+        zeroRttHandshake: p['reduce-rtt'],
+        heartbeat: p['heartbeat-interval'],
+        idleSessionTimeout: p['idle-session-timeout'],
         
         raw: p,
       };

@@ -10,6 +10,8 @@ export type ProxyType =
   | 'wireguard'
   | 'snell'
   | 'anytls'
+  | 'naive'
+  | 'shadowtls'
   | 'http'
   | 'socks5';
 
@@ -38,6 +40,8 @@ export interface ProxyNode {
   alpn?: string[];
   skipCertVerify?: boolean;
   fingerprint?: string;
+  certificate?: string | string[];
+  certificatePublicKeySha256?: string[];
   reality?: {
     enabled: boolean;
     publicKey: string;
@@ -56,10 +60,34 @@ export interface ProxyNode {
   remoteDnsResolve?: boolean;
   udp?: boolean;
 
-  // Snell specific
+  // Snell & ShadowTLS specific
   psk?: string;
   snellVersion?: number;
   obfsHost?: string;
+  shadowtlsVersion?: number;
+  detour?: string;
+
+  // Hysteria & Hysteria2 specific
+  serverPorts?: string[];
+  hopInterval?: string;
+  hopIntervalMax?: string;
+  upMbps?: number;
+  downMbps?: number;
+
+  // AnyTLS specific
+  idleSessionCheckInterval?: string;
+  idleSessionTimeout?: string;
+  minIdleSession?: number;
+
+  // Naive specific
+  quic?: boolean;
+  quicCongestionControl?: string;
+  udpOverTcp?: boolean;
+
+  // TUIC specific
+  zeroRttHandshake?: boolean;
+  heartbeat?: string;
+  udpRelayMode?: string;
 
   // Transport & Flow
   network?: 'tcp' | 'ws' | 'grpc' | 'http' | 'h2';
@@ -68,10 +96,14 @@ export interface ProxyNode {
   wsPath?: string;
   wsHeaders?: Record<string, string>;
   grpcServiceName?: string;
-  
+  maxEarlyData?: number;
+  earlyDataHeaderName?: string;
+
   congestionControl?: string;
   obfs?: string;
   obfsPassword?: string;
+
+  multiplex?: any;
 
   raw?: any;
 }

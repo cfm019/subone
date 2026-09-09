@@ -1,6 +1,45 @@
+import crypto from 'crypto';
 import { CountryPatternRule, ProxyNode, ProxyType } from '../../types/index.js';
 
 import { detectCountry } from './country.js';
+
+export function parseCertificateHelper(raw: string | undefined): { pem: string; lines: string[]; spkiSha256: string | null } | null {
+  if (!raw) return null;
+  let text = raw;
+  if (text.includes('\\r\\n')) text = text.replace(/\\r\\n/g, '\n');
+  if (text.includes('\\n')) text = text.replace(/\\n/g, '\n');
+  if (text.includes('\r\n')) text = text.replace(/\r\n/g, '\n');
+
+  let lines: string[];
+  if (text.includes('\n')) {
+    lines = text.split('\n');
+  } else if (text.includes(',')) {
+    lines = text.split(',');
+  } else {
+    lines = [text];
+  }
+
+  const cleanLines = lines.map(line => {
+    if (!line) return '';
+    if (line.includes('-----')) return line.trim();
+    // In URL queries, '+' is often unencoded and decoded to ' '.
+    // Convert ' ' back to '+' before trimming to preserve leading/trailing base64 characters.
+    return line.replace(/ /g, '+').trim();
+  }).filter(Boolean);
+
+  if (cleanLines.length === 0) return null;
+  const pem = cleanLines.join('\n');
+  let spkiSha256: string | null = null;
+  try {
+    const x509 = new crypto.X509Certificate(pem);
+    const spki = x509.publicKey.export({ type: 'spki', format: 'der' });
+    spkiSha256 = crypto.createHash('sha256').update(spki).digest('base64');
+  } catch (e) {
+    // Ignore unparsable cert
+  }
+
+  return { pem, lines: cleanLines, spkiSha256 };
+}
 
 function decodeBase64Safe(str: string): string {
   try {
@@ -38,6 +77,8 @@ export function parseNodeUri(uri: string, index: number = 0, countryPatterns?: C
       return parseSnell(uri, index, countryPatterns);
     } else if (lower.startsWith('anytls://')) {
       return parseAnytls(uri, index, countryPatterns);
+    } else if (lower.startsWith('naive://') || lower.startsWith('naive+https://') || lower.startsWith('naive+quic://')) {
+      return parseNaive(uri, index, countryPatterns);
     } else if (lower.startsWith('socks5://') || lower.startsWith('socks5h://') || lower.startsWith('socks://')) {
       return parseSocks5(uri, index, countryPatterns);
     } else if (lower.startsWith('v2rayn://')) {
@@ -58,15 +99,30 @@ function parseVless(uri: string, index: number, countryPatterns?: CountryPattern
   const params = url.searchParams;
 
   const security = params.get('security') || 'none';
-  const type = params.get('type') || 'tcp';
-  const flow = params.get('flow') || undefined;
+  const type = (params.get('type') || 'tcp').toLowerCase();
+  const flow = params.get('flow') || (name.toLowerCase().includes('vision') || name.toLowerCase().includes('xtls') ? 'xtls-rprx-vision' : undefined);
   const sni = params.get('sni') || undefined;
   const fp = params.get('fp') || 'chrome';
   const pbk = params.get('pbk') || undefined;
   const sid = params.get('sid') || undefined;
-  const path = params.get('path') || undefined;
+  const rawPath = params.get('path') || undefined;
   const host = params.get('host') || undefined;
-  const serviceName = params.get('serviceName') || undefined;
+  const serviceName = params.get('serviceName') || params.get('service_name') || undefined;
+  const insecure = params.get('insecure') === '1' || params.get('allowInsecure') === '1' || params.get('skipCertVerify') === 'true';
+
+  let cleanPath = rawPath;
+  let maxEarlyData: number | undefined;
+  let earlyDataHeaderName: string | undefined;
+
+  if (rawPath) {
+    const edMatch = rawPath.match(/[?&]ed=(\d+)/);
+    if (edMatch) {
+      maxEarlyData = parseInt(edMatch[1], 10);
+      earlyDataHeaderName = 'Sec-WebSocket-Protocol';
+      cleanPath = rawPath.replace(/[?&]ed=\d+/, '');
+      if (cleanPath === '') cleanPath = '/';
+    }
+  }
 
   const country = detectCountry(name, countryPatterns);
 
@@ -80,18 +136,21 @@ function parseVless(uri: string, index: number, countryPatterns?: CountryPattern
     countryCode: country?.code,
     countryEmoji: country?.emoji,
     tls: security === 'tls' || security === 'reality',
+    skipCertVerify: insecure || undefined,
     flow,
     sni,
     fingerprint: fp,
-    reality: security === 'reality' && pbk ? {
+    reality: (security === 'reality' || Boolean(pbk)) && pbk ? {
       enabled: true,
       publicKey: pbk,
-      shortId: sid || undefined,
+      shortId: sid || '',
     } : undefined,
     network: type as any,
-    wsPath: path,
+    wsPath: cleanPath,
     wsHeaders: host ? { Host: host } : undefined,
     grpcServiceName: serviceName,
+    maxEarlyData,
+    earlyDataHeaderName,
   };
 }
 
@@ -137,20 +196,19 @@ function parseShadowsocks(uri: string, index: number, countryPatterns?: CountryP
   let port = 0;
 
   if (urlPart.includes('@')) {
-    const [userinfo, serverinfo] = urlPart.split('@');
+    const atIdx = urlPart.lastIndexOf('@');
+    const userinfo = urlPart.slice(0, atIdx);
+    const serverinfo = urlPart.slice(atIdx + 1);
     const [s, p] = serverinfo.split(':');
     server = s;
-    port = parseInt(p, 10);
+    port = parseInt(p || '8388', 10);
 
     const decodedUserinfo = decodeBase64Safe(userinfo);
-    if (decodedUserinfo.includes(':')) {
-      const [m, pwd] = decodedUserinfo.split(':');
-      method = m;
-      password = pwd;
-    } else {
-      const [m, pwd] = userinfo.split(':');
-      method = m;
-      password = pwd;
+    const target = decodedUserinfo.includes(':') ? decodedUserinfo : userinfo;
+    const colonIdx = target.indexOf(':');
+    if (colonIdx !== -1) {
+      method = target.slice(0, colonIdx);
+      password = target.slice(colonIdx + 1);
     }
   } else {
     const decoded = decodeBase64Safe(urlPart);
@@ -158,12 +216,14 @@ function parseShadowsocks(uri: string, index: number, countryPatterns?: CountryP
     if (atIndex !== -1) {
       const userinfo = decoded.slice(0, atIndex);
       const serverinfo = decoded.slice(atIndex + 1);
-      const [m, pwd] = userinfo.split(':');
-      method = m;
-      password = pwd;
+      const colonIdx = userinfo.indexOf(':');
+      if (colonIdx !== -1) {
+        method = userinfo.slice(0, colonIdx);
+        password = userinfo.slice(colonIdx + 1);
+      }
       const [s, p] = serverinfo.split(':');
       server = s;
-      port = parseInt(p, 10);
+      port = parseInt(p || '8388', 10);
     }
   }
 
@@ -194,6 +254,11 @@ function parseTrojan(uri: string, index: number, countryPatterns?: CountryPatter
   const path = params.get('path') || undefined;
   const host = params.get('host') || undefined;
   const fp = params.get('fp') || 'chrome';
+  const insecure = params.get('insecure') === '1' || params.get('allowInsecure') === '1' || params.get('skipCertVerify') === 'true';
+
+  const certRaw = params.get('tls_certificate') || params.get('cert') || params.get('ca') || undefined;
+  const certInfo = parseCertificateHelper(certRaw);
+  const certPubKeySha256 = certInfo?.spkiSha256 ? [certInfo.spkiSha256] : (params.get('pinSHA256') ? [params.get('pinSHA256')!] : undefined);
 
   const country = detectCountry(name, countryPatterns);
   return {
@@ -207,7 +272,10 @@ function parseTrojan(uri: string, index: number, countryPatterns?: CountryPatter
     countryEmoji: country?.emoji,
     tls: true,
     sni,
+    skipCertVerify: insecure || undefined,
     fingerprint: fp,
+    certificate: certInfo?.lines,
+    certificatePublicKeySha256: certPubKeySha256,
     network: type as any,
     wsPath: path,
     wsHeaders: host ? { Host: host } : undefined,
@@ -227,6 +295,32 @@ function parseHysteria2(uri: string, index: number, countryPatterns?: CountryPat
   const obfsPassword = params.get('obfs-password') || undefined;
   const insecure = params.get('insecure') === '1' || params.get('allowInsecure') === '1' || params.get('skipCertVerify') === 'true';
 
+  const mport = params.get('mport') || params.get('ports') || params.get('server_ports') || undefined;
+  let serverPorts: string[] | undefined;
+  if (mport) {
+    serverPorts = mport.split(',').map(s => s.trim().replace('-', ':')).filter(Boolean);
+  }
+
+  const hopInterval = params.get('hop_interval') || params.get('hop-interval') || undefined;
+  const hopIntervalMax = params.get('hop_interval_max') || params.get('hop-interval-max') || (hopInterval ? '60s' : undefined);
+
+  const upStr = params.get('upmbps') || params.get('up_mbps') || params.get('up') || undefined;
+  const upMbps = upStr ? parseInt(upStr, 10) : undefined;
+  const downStr = params.get('downmbps') || params.get('down_mbps') || params.get('down') || undefined;
+  const downMbps = downStr ? parseInt(downStr, 10) : undefined;
+
+  let alpn: string[] | undefined;
+  if (params.has('alpn')) {
+    const val = params.get('alpn');
+    alpn = val ? val.split(',').map(s => s.trim()).filter(Boolean) : ['h3'];
+  } else {
+    alpn = ['h3'];
+  }
+
+  const certRaw = params.get('tls_certificate') || params.get('cert') || undefined;
+  const certInfo = parseCertificateHelper(certRaw);
+  const certPubKeySha256 = certInfo?.spkiSha256 ? [certInfo.spkiSha256] : (params.get('pinSHA256') ? [params.get('pinSHA256')!] : undefined);
+
   const country = detectCountry(name, countryPatterns);
   return {
     id: `node-${index}-${server}-${port}`,
@@ -234,12 +328,20 @@ function parseHysteria2(uri: string, index: number, countryPatterns?: CountryPat
     type: 'hysteria2',
     server,
     port,
+    serverPorts,
+    hopInterval,
+    hopIntervalMax,
+    upMbps,
+    downMbps,
     password,
     countryCode: country?.code,
     countryEmoji: country?.emoji,
     tls: true,
     sni,
+    alpn,
     skipCertVerify: insecure || undefined,
+    certificate: certInfo?.lines,
+    certificatePublicKeySha256: certPubKeySha256,
     obfs,
     obfsPassword,
   };
@@ -255,6 +357,23 @@ function parseTuic(uri: string, index: number, countryPatterns?: CountryPatternR
   const params = url.searchParams;
 
   const sni = params.get('sni') || undefined;
+  const congestionControl = params.get('congestion_control') || params.get('cc') || 'bbr';
+  const udpRelayMode = params.get('udp_relay_mode') || 'native';
+  const zeroRttHandshake = params.get('zero_rtt_handshake') === '1' || params.get('zero_rtt_handshake') === 'true';
+  const heartbeat = params.get('heartbeat') || '10s';
+
+  let alpn: string[] | undefined;
+  if (params.has('alpn')) {
+    const val = params.get('alpn');
+    alpn = val ? val.split(',').map(s => s.trim()).filter(Boolean) : ['h3'];
+  } else {
+    alpn = ['h3'];
+  }
+
+  const certRaw = params.get('tls_certificate') || params.get('cert') || undefined;
+  const certInfo = parseCertificateHelper(certRaw);
+  const certPubKeySha256 = certInfo?.spkiSha256 ? [certInfo.spkiSha256] : (params.get('pinSHA256') ? [params.get('pinSHA256')!] : undefined);
+
   const country = detectCountry(name, countryPatterns);
 
   return {
@@ -269,6 +388,13 @@ function parseTuic(uri: string, index: number, countryPatterns?: CountryPatternR
     countryEmoji: country?.emoji,
     tls: true,
     sni,
+    alpn,
+    congestionControl,
+    udpRelayMode,
+    zeroRttHandshake,
+    heartbeat,
+    certificate: certInfo?.lines,
+    certificatePublicKeySha256: certPubKeySha256,
   };
 }
 
@@ -382,9 +508,17 @@ function parseAnytls(uri: string, index: number, countryPatterns?: CountryPatter
 
   const sni = params.get('sni') || params.get('serverName') || params.get('peer') || undefined;
   const alpnStr = params.get('alpn');
-  const alpn = alpnStr ? alpnStr.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+  const alpn = alpnStr ? alpnStr.split(',').map(s => s.trim()).filter(Boolean) : ['h2', 'http/1.1'];
   const fp = params.get('fp') || params.get('fingerprint') || 'chrome';
   const insecure = params.get('insecure') === '1' || params.get('allowInsecure') === '1' || params.get('skipCertVerify') === 'true';
+
+  const idleSessionCheckInterval = params.get('idle_session_check_interval') || '30s';
+  const idleSessionTimeout = params.get('idle_session_timeout') || '30s';
+  const minIdleSession = params.get('min_idle_session') ? parseInt(params.get('min_idle_session')!, 10) : 5;
+
+  const certRaw = params.get('tls_certificate') || params.get('cert') || undefined;
+  const certInfo = parseCertificateHelper(certRaw);
+  const certPubKeySha256 = certInfo?.spkiSha256 ? [certInfo.spkiSha256] : (params.get('pinSHA256') ? [params.get('pinSHA256')!] : undefined);
 
   const country = detectCountry(name, countryPatterns);
 
@@ -402,6 +536,51 @@ function parseAnytls(uri: string, index: number, countryPatterns?: CountryPatter
     alpn,
     fingerprint: fp,
     skipCertVerify: insecure,
+    idleSessionCheckInterval,
+    idleSessionTimeout,
+    minIdleSession,
+    certificate: certInfo?.lines,
+    certificatePublicKeySha256: certPubKeySha256,
+  };
+}
+
+function parseNaive(uri: string, index: number, countryPatterns?: CountryPatternRule[]): ProxyNode {
+  const normUri = uri.replace(/^naive\+https:\/\//i, 'https://').replace(/^naive\+quic:\/\//i, 'quic://').replace(/^naive:\/\//i, 'https://');
+  const isQuic = uri.toLowerCase().startsWith('naive+quic://');
+  const url = new URL(normUri);
+  const username = decodeURIComponent(url.username);
+  const password = decodeURIComponent(url.password);
+  const server = url.hostname;
+  const port = parseInt(url.port || '443', 10);
+  const name = decodeURIComponent(url.hash.slice(1)) || `Naive-${server}-${port}`;
+  const params = url.searchParams;
+
+  const sni = params.get('sni') || params.get('peer') || undefined;
+  const insecure = params.get('insecure') === '1' || params.get('allowInsecure') === '1';
+  const certRaw = params.get('tls_certificate') || params.get('cert') || undefined;
+  const certInfo = parseCertificateHelper(certRaw);
+  const quic = isQuic || params.get('quic') === '1' || params.get('quic') === 'true';
+
+  const country = detectCountry(name, countryPatterns);
+
+  return {
+    id: `node-${index}-${server}-${port}`,
+    name,
+    type: 'naive',
+    server,
+    port,
+    username: username || password,
+    password,
+    countryCode: country?.code,
+    countryEmoji: country?.emoji,
+    tls: true,
+    sni,
+    skipCertVerify: insecure,
+    quic,
+    quicCongestionControl: params.get('congestion_control') || params.get('cc') || 'bbr',
+    udpOverTcp: quic ? false : true,
+    certificate: certInfo?.lines,
+    certificatePublicKeySha256: certInfo?.spkiSha256 ? [certInfo.spkiSha256] : undefined,
   };
 }
 
@@ -533,7 +712,11 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
 
   // Determine protocol type
   let type: ProxyType = 'vless';
-  if (protoHint === 'hysteria2' || protoHint === 'hy2') {
+  if (protoHint === 'naive') {
+    type = 'naive';
+  } else if (protoHint === 'anytls') {
+    type = 'anytls';
+  } else if (protoHint === 'hysteria2' || protoHint === 'hy2') {
     type = 'hysteria2';
   } else if (protoHint === 'hysteria' || protoHint === 'hy') {
     type = 'hysteria';
@@ -551,8 +734,6 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
     type = 'ss';
   } else if (protoHint === 'socks' || protoHint === 'socks5') {
     type = 'socks5';
-  } else if (protoHint === 'anytls') {
-    type = 'anytls';
   } else if (protoHint === 'snell') {
     type = 'snell';
   } else if (json.ConfigType !== undefined) {
@@ -562,11 +743,13 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
       case 2: type = 'ss'; break;
       case 3: type = 'socks5'; break;
       case 4: type = 'vless'; break;
-      case 5: type = 'trojan'; break;
-      case 6: type = 'hysteria'; break;
+      case 5: type = 'vless'; break;
+      case 6: type = 'trojan'; break;
       case 7: type = 'hysteria2'; break;
       case 8: type = 'tuic'; break;
       case 9: type = 'wireguard'; break;
+      case 11: type = 'anytls'; break;
+      case 12: type = 'naive'; break;
       default:
         if (json.ProtoExtraObj?.PrivateKey || json.PublicKey) type = 'wireguard';
         else if (json.Flow || json.StreamSecurity === 'reality') type = 'vless';
@@ -584,11 +767,15 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
 
   const insecure = json.AllowInsecure === true || json.AllowInsecure === 'true' || json.AllowInsecure === '1' || json.AllowInsecure === 1;
   const sni = json.Sni || json.sni || json.ServerName || json.RequestHost || undefined;
-  const fp = json.Fingerprint || json.fingerprint || undefined;
+  const fp = json.Fingerprint || json.fingerprint || 'chrome';
   const alpn = json.Alpn ? (Array.isArray(json.Alpn) ? json.Alpn : String(json.Alpn).split(',').map((s: string) => s.trim()).filter(Boolean)) : undefined;
-  const network = (json.Network || json.network || 'tcp').toLowerCase();
+  let network = (json.Network || json.network || 'tcp').toLowerCase();
   const path = json.Path || json.path || undefined;
   const host = json.RequestHost || json.requestHost || undefined;
+
+  if (name.toLowerCase().includes('h2') || network === 'h2' || network === 'http') {
+    network = 'http';
+  }
 
   const node: ProxyNode = {
     id: `node-${index}-${server}-${port}`,
@@ -608,22 +795,41 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
     grpcServiceName: path,
   };
 
+  if (json.Cert || json.cert) {
+    const certInfo = parseCertificateHelper(json.Cert || json.cert);
+    if (certInfo) {
+      node.certificate = certInfo.lines;
+      if (certInfo.spkiSha256) {
+        node.certificatePublicKeySha256 = [certInfo.spkiSha256];
+      }
+    }
+  }
+
   const extra = json.ProtoExtraObj || {};
 
   if (type === 'hysteria2') {
     node.password = json.Password || json.password || json.Id || json.id || '';
     node.tls = true;
+    node.alpn = node.alpn || ['h3'];
     node.obfs = extra.Obfs || extra.obfs || undefined;
     node.obfsPassword = extra.ObfsPassword || extra.obfsPassword || undefined;
+    const mport = extra.Mport || extra.mport || extra.Ports || extra.ports;
+    if (mport) {
+      node.serverPorts = String(mport).split(',').map(s => s.trim().replace('-', ':')).filter(Boolean);
+    }
+    node.hopInterval = extra.HopInterval || extra.hop_interval || '30s';
+    node.hopIntervalMax = extra.HopIntervalMax || extra.hop_interval_max || '60s';
+    if (extra.UpMbps || extra.up_mbps || extra.Up) node.upMbps = Number(extra.UpMbps || extra.up_mbps || extra.Up);
+    if (extra.DownMbps || extra.down_mbps || extra.Down) node.downMbps = Number(extra.DownMbps || extra.down_mbps || extra.Down);
   } else if (type === 'vless') {
     node.uuid = json.Id || json.id || json.Password || '';
     node.tls = json.StreamSecurity === 'tls' || json.StreamSecurity === 'reality' || Boolean(json.PublicKey);
-    node.flow = json.Flow || json.flow || undefined;
+    node.flow = json.Flow || json.flow || (name.toLowerCase().includes('vision') || name.toLowerCase().includes('xtls') ? 'xtls-rprx-vision' : undefined);
     if (json.StreamSecurity === 'reality' || json.PublicKey) {
       node.reality = {
         enabled: true,
         publicKey: json.PublicKey || '',
-        shortId: json.ShortId || json.shortId || undefined,
+        shortId: json.ShortId || json.shortId || '',
       };
     }
   } else if (type === 'vmess') {
@@ -641,7 +847,23 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
     node.uuid = json.Id || json.id || '';
     node.password = json.Password || json.password || '';
     node.tls = true;
-    node.congestionControl = extra.CongestionController || extra.congestionController || undefined;
+    node.congestionControl = extra.CongestionControl || extra.congestion_control || extra.CongestionController || 'bbr';
+    node.udpRelayMode = extra.UdpRelayMode || extra.udp_relay_mode || 'native';
+    node.zeroRttHandshake = extra.ZeroRttHandshake !== undefined ? Boolean(extra.ZeroRttHandshake) : false;
+    node.heartbeat = extra.Heartbeat || extra.heartbeat || '10s';
+    node.alpn = node.alpn || ['h3'];
+  } else if (type === 'naive') {
+    node.username = json.Username || json.username || json.Password || '';
+    node.password = json.Password || json.password || '';
+    node.tls = true;
+    const isQuic = Boolean(extra.NaiveQuic || extra.quic || name.toLowerCase().includes('quic'));
+    node.quic = isQuic;
+    if (isQuic) {
+      node.quicCongestionControl = extra.CongestionControl || extra.congestion_control || 'bbr';
+      node.udpOverTcp = false;
+    } else {
+      node.udpOverTcp = true;
+    }
   } else if (type === 'wireguard') {
     node.privateKey = extra.PrivateKey || json.Password || '';
     node.publicKey = extra.PublicKey || json.PublicKey || '';
@@ -665,6 +887,9 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
   } else if (type === 'anytls') {
     node.password = json.Password || json.password || '';
     node.tls = true;
+    node.idleSessionCheckInterval = extra.IdleSessionCheckInterval || extra.idle_session_check_interval || json.IdleSessionCheckInterval || '30s';
+    node.idleSessionTimeout = extra.IdleSessionTimeout || extra.idle_session_timeout || json.IdleSessionTimeout || '30s';
+    node.minIdleSession = extra.MinIdleSession !== undefined ? Number(extra.MinIdleSession) : (json.MinIdleSession !== undefined ? Number(json.MinIdleSession) : 5);
   }
 
   return node;

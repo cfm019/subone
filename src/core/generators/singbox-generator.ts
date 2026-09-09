@@ -23,6 +23,23 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
   if (node.type === 'ss') {
     base.method = node.method || '2022-blake3-aes-128-gcm';
     base.password = node.password || '';
+    if (node.detour) base.detour = node.detour;
+    if (node.udpOverTcp !== undefined) base.udp_over_tcp = node.udpOverTcp;
+    if (node.multiplex) base.multiplex = node.multiplex;
+    return base;
+  }
+
+  if (node.type === 'shadowtls') {
+    base.version = node.shadowtlsVersion || 3;
+    base.password = node.password || '';
+    base.tls = {
+      enabled: true,
+      server_name: node.sni || node.server,
+      utls: {
+        enabled: true,
+        fingerprint: node.fingerprint || 'chrome',
+      },
+    };
     return base;
   }
 
@@ -34,22 +51,31 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     if (node.tls) {
       base.tls = {
         enabled: true,
-        insecure: Boolean(node.skipCertVerify),
         server_name: node.sni || node.server,
-        utls: {
-          enabled: true,
-          fingerprint: node.fingerprint || 'chrome',
-        },
       };
+      if (node.skipCertVerify !== undefined) {
+        base.tls.insecure = Boolean(node.skipCertVerify);
+      }
+      if (node.fingerprint) {
+        base.tls.utls = {
+          enabled: true,
+          fingerprint: node.fingerprint,
+        };
+      }
 
       if (node.reality && node.reality.enabled) {
         base.tls.reality = {
           enabled: true,
           public_key: node.reality.publicKey,
+          short_id: node.reality.shortId ?? '',
         };
-        if (node.reality.shortId) {
-          base.tls.reality.short_id = node.reality.shortId;
-        }
+      }
+
+      if (node.certificatePublicKeySha256) {
+        base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
+      }
+      if (node.certificate) {
+        base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
       }
     }
 
@@ -59,11 +85,23 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
         path: node.wsPath || '/',
         headers: node.wsHeaders || {},
       };
+      if (node.maxEarlyData) {
+        base.transport.max_early_data = node.maxEarlyData;
+        base.transport.early_data_header_name = node.earlyDataHeaderName || 'Sec-WebSocket-Protocol';
+      }
     } else if (node.network === 'grpc') {
       base.transport = {
         type: 'grpc',
-        service_name: node.grpcServiceName || '',
+        service_name: node.grpcServiceName || 'grpc',
       };
+    } else if (node.network === 'http' || node.network === 'h2') {
+      base.transport = {
+        type: 'http',
+      };
+    }
+
+    if (node.multiplex) {
+      base.multiplex = node.multiplex;
     }
 
     return base;
@@ -71,14 +109,25 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
 
   if (node.type === 'vmess') {
     base.uuid = node.uuid || '';
-    base.alter_id = node.alterId || 0;
     base.security = node.cipher || 'auto';
+    if (node.alterId !== undefined) base.alter_id = node.alterId;
     if (node.tls) {
       base.tls = {
         enabled: true,
-        insecure: Boolean(node.skipCertVerify),
-        server_name: node.sni,
+        server_name: node.sni || node.server,
       };
+      if (node.skipCertVerify !== undefined) {
+        base.tls.insecure = Boolean(node.skipCertVerify);
+      }
+      if (node.fingerprint) {
+        base.tls.utls = {
+          enabled: true,
+          fingerprint: node.fingerprint,
+        };
+      }
+      if (node.certificatePublicKeySha256) {
+        base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
+      }
     }
     if (node.network === 'ws') {
       base.transport = {
@@ -86,6 +135,13 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
         path: node.wsPath || '/',
         headers: node.wsHeaders || {},
       };
+      if (node.maxEarlyData) {
+        base.transport.max_early_data = node.maxEarlyData;
+        base.transport.early_data_header_name = node.earlyDataHeaderName || 'Sec-WebSocket-Protocol';
+      }
+    }
+    if (node.multiplex) {
+      base.multiplex = node.multiplex;
     }
     return base;
   }
@@ -94,30 +150,71 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     base.password = node.password || '';
     base.tls = {
       enabled: true,
-      insecure: Boolean(node.skipCertVerify),
-      server_name: node.sni,
-      utls: {
-        enabled: true,
-        fingerprint: node.fingerprint || 'chrome',
-      },
+      server_name: node.sni || node.server,
     };
+    if (node.skipCertVerify !== undefined) {
+      base.tls.insecure = Boolean(node.skipCertVerify);
+    }
+    if (node.fingerprint) {
+      base.tls.utls = {
+        enabled: true,
+        fingerprint: node.fingerprint,
+      };
+    }
+    if (node.certificatePublicKeySha256) {
+      base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
+    }
+    if (node.certificate) {
+      base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
+    }
     if (node.network === 'ws') {
       base.transport = {
         type: 'ws',
         path: node.wsPath || '/',
         headers: node.wsHeaders || {},
       };
+      if (node.maxEarlyData) {
+        base.transport.max_early_data = node.maxEarlyData;
+        base.transport.early_data_header_name = node.earlyDataHeaderName || 'Sec-WebSocket-Protocol';
+      }
+    }
+    if (node.multiplex) {
+      base.multiplex = node.multiplex;
     }
     return base;
   }
 
   if (node.type === 'hysteria2') {
+    if (node.serverPorts && node.serverPorts.length > 0) {
+      base.server_ports = node.serverPorts;
+    }
+    if (node.hopInterval) {
+      base.hop_interval = node.hopInterval;
+    }
+    if (node.hopIntervalMax) {
+      base.hop_interval_max = node.hopIntervalMax;
+    }
+    if (node.upMbps !== undefined) {
+      base.up_mbps = node.upMbps;
+    }
+    if (node.downMbps !== undefined) {
+      base.down_mbps = node.downMbps;
+    }
     base.password = node.password || '';
     base.tls = {
       enabled: true,
-      insecure: Boolean(node.skipCertVerify),
-      server_name: node.sni,
+      server_name: node.sni || node.server,
+      alpn: node.alpn || ['h3'],
     };
+    if (node.skipCertVerify !== undefined) {
+      base.tls.insecure = Boolean(node.skipCertVerify);
+    }
+    if (node.certificatePublicKeySha256) {
+      base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
+    }
+    if (node.certificate) {
+      base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
+    }
     const obfsType = node.obfs || node.raw?.obfs;
     const obfsPassword = node.obfsPassword || node.raw?.['obfs-password'] || node.raw?.['obfs-opts']?.password;
     if (obfsType && obfsPassword) {
@@ -125,6 +222,30 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
         type: obfsType,
         password: obfsPassword,
       };
+    }
+    return base;
+  }
+
+  if (node.type === 'tuic') {
+    base.uuid = node.uuid || '';
+    base.password = node.password || '';
+    base.congestion_control = node.congestionControl || 'bbr';
+    base.udp_relay_mode = node.udpRelayMode || 'native';
+    base.zero_rtt_handshake = Boolean(node.zeroRttHandshake);
+    if (node.heartbeat) base.heartbeat = node.heartbeat;
+    base.tls = {
+      enabled: true,
+      server_name: node.sni || node.server,
+      alpn: node.alpn || ['h3'],
+    };
+    if (node.skipCertVerify !== undefined) {
+      base.tls.insecure = Boolean(node.skipCertVerify);
+    }
+    if (node.certificatePublicKeySha256) {
+      base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
+    }
+    if (node.certificate) {
+      base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
     }
     return base;
   }
@@ -152,9 +273,17 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
 
   if (node.type === 'anytls') {
     base.password = node.password || '';
+    if (node.idleSessionCheckInterval) {
+      base.idle_session_check_interval = node.idleSessionCheckInterval;
+    }
+    if (node.idleSessionTimeout) {
+      base.idle_session_timeout = node.idleSessionTimeout;
+    }
+    if (node.minIdleSession !== undefined) {
+      base.min_idle_session = node.minIdleSession;
+    }
     base.tls = {
       enabled: true,
-      insecure: Boolean(node.skipCertVerify),
       server_name: node.sni || node.server,
       alpn: node.alpn || ['h2', 'http/1.1'],
       utls: {
@@ -162,6 +291,42 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
         fingerprint: node.fingerprint || 'chrome',
       },
     };
+    if (node.skipCertVerify !== undefined) {
+      base.tls.insecure = Boolean(node.skipCertVerify);
+    }
+    if (node.certificatePublicKeySha256) {
+      base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
+    }
+    if (node.certificate) {
+      base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
+    }
+    return base;
+  }
+
+  if (node.type === 'naive') {
+    base.username = node.username || node.password || '';
+    base.password = node.password || '';
+    if (node.quic) {
+      base.udp_over_tcp = false;
+      base.quic = true;
+      base.quic_congestion_control = node.quicCongestionControl || 'bbr';
+    } else {
+      base.udp_over_tcp = node.udpOverTcp !== undefined ? node.udpOverTcp : true;
+      base.quic = false;
+    }
+    base.tls = {
+      enabled: true,
+      server_name: node.sni || node.server,
+    };
+    if (node.skipCertVerify !== undefined) {
+      base.tls.insecure = Boolean(node.skipCertVerify);
+    }
+    if (node.certificate) {
+      base.tls.certificate = Array.isArray(node.certificate) ? node.certificate : [node.certificate];
+    }
+    if (node.certificatePublicKeySha256) {
+      base.tls.certificate_public_key_sha256 = node.certificatePublicKeySha256;
+    }
     return base;
   }
 
