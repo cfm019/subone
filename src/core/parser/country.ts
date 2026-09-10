@@ -19,9 +19,9 @@ export const DEFAULT_COUNTRY_PATTERNS: CountryPatternRule[] = [
     id: 'c-tw',
     code: 'TW',
     name: '台湾',
-    emoji: '🇹🇼',
-    pattern: '(🇹🇼|台湾|台北|台中|高雄|tw|taiwan|tai\\s*wan|twn)',
-    groupName: '🇹🇼 台湾节点',
+    emoji: '🇨🇳',
+    pattern: '(台湾|台北|台中|高雄|tw|taiwan|tai\\s*wan|twn)',
+    groupName: '🇨🇳 台湾节点',
   },
   {
     id: 'c-jp',

@@ -747,16 +747,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   {previewData.clientType === 'singbox'
                     ? 'Sing-box JSON'
                     : previewData.clientType === 'mihomo'
-                    ? 'Clash / Mihomo YAML'
-                    : previewData.clientType === 'loon'
-                    ? 'Loon CONF'
-                    : previewData.clientType === 'quantumultx'
-                    ? 'Quantumult X CONF'
-                    : previewData.clientType === 'egern'
-                    ? 'Egern YAML'
-                    : previewData.clientType === 'shadowrocket'
-                    ? 'Shadowrocket CONF'
-                    : previewData.clientType}
+                      ? 'Clash / Mihomo YAML'
+                      : previewData.clientType === 'loon'
+                        ? 'Loon CONF'
+                        : previewData.clientType === 'quantumultx'
+                          ? 'Quantumult X CONF'
+                          : previewData.clientType === 'egern'
+                            ? 'Egern YAML'
+                            : previewData.clientType === 'shadowrocket'
+                              ? 'Shadowrocket CONF'
+                              : previewData.clientType}
                 </span>
                 <span>•</span>
                 <span>包含节点：<strong className="text-[#1F1E1D]">{previewData.nodeCount}</strong> 个</span>
@@ -1174,7 +1174,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   <div>
                     <h4 className="text-xs font-bold text-[#1F1E1D]">客户端模版绑定</h4>
                     <p className="text-[11px] text-[#8C877D] mt-0.5">
-                      默认继承系统全局模版；仅在需要时为特定客户端单独指定模版。
+                      选择客户端模版。未绑定的客户端自动跟随系统默认模版。
                     </p>
                   </div>
 
@@ -1211,7 +1211,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                 {customizedClients.length === 0 ? (
                   <div className="p-3 bg-[#FAF8F5] border border-[#ECE7DE] rounded-xl text-xs text-[#69655E] flex items-center justify-between">
                     <span>当前所有客户端均跟随系统全局默认模版</span>
-                    <span className="text-[11px] text-[#8C877D]">未单独定制</span>
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -1271,9 +1270,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                       );
                     })}
 
-                    <div className="text-[11px] text-[#8C877D] px-1 pt-0.5">
-                      其余未绑定的客户端自动跟随系统全局默认模版。
-                    </div>
                   </div>
                 )}
               </div>
