@@ -1,15 +1,17 @@
 # SubOne
 
-多节点与多订阅聚合服务，支持维护策略组与自定义分流规则、渲染模版生成各客户端配置并下发。目标格式目前支持 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
+多节点多源聚合与配置生成。支持汇聚多个上游机场订阅与自建独立节点，分 Profile 定制策略组、分流规则及模版，生成组合后的聚合订阅配置。
+
+目标格式支持 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
 
 
 ## 主要特性
 
-- **多 Profile **：
+- **多 Profile**：
   - 在 subone 中管理多个 Profile，如手机、笔记本、台机、旁路由，可能使用不同的客户端，相应使用不同的配置，每个 Profile 各自使用一个 Token 链接；
   - 每个 Profile 可按需勾选不同源节点、自选策略组、分流规则及各自的模版；
-- **节点与订阅聚合**：
-  - 支持导入各类机场订阅，提取节点并按地区或关键字筛选分组；
+- **独立节点与上游机场订阅源聚合**：
+  - 支持导入各类上游机场订阅，提取节点并按地区或关键字筛选分组；
   - 支持添加自建独立节点，支持单条/批量 URI、Clash YAML、Sing-box JSON 格式录入与智能解析；
 - **协议与传输支持**：
   - **支持导入解析**：VLESS (Reality/Vision/gRPC/WS)、VMess、Shadowsocks (SS 2022/AEAD)、Trojan、Hysteria 2、TUIC v5、AnyTLS、WireGuard、Snell (v1~v4)、SOCKS5、HTTP、v2rayn 等协议；
