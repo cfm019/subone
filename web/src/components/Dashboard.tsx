@@ -45,6 +45,7 @@ interface DashboardProps {
   nodes: ProxyNode[];
   onNavigateTab: (tab: 'dashboard' | 'sources' | 'nodes' | 'groups' | 'rules' | 'templates') => void;
   onRefreshConfig: () => Promise<void>;
+  onUpdateProfiles: (updater: (prev: SubscriptionProfile[]) => SubscriptionProfile[]) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -52,6 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   nodes,
   onNavigateTab,
   onRefreshConfig,
+  onUpdateProfiles,
 }) => {
   const profiles = config?.profiles || [];
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -193,6 +195,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.message || '创建失败');
+        if (data.data) {
+          onUpdateProfiles(prev => [...prev, data.data]);
+        }
       } else {
         const res = await apiFetch(`${API_BASE}/profiles/${editingProfile.id}`, {
           method: 'PUT',
@@ -201,9 +206,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         });
         const data = await res.json();
         if (!data.success) throw new Error(data.message || '更新失败');
+        if (data.data) {
+          onUpdateProfiles(prev => prev.map(p => p.id === data.data.id ? data.data : p));
+        }
       }
 
-      await onRefreshConfig();
       setEditingProfile(null);
     } catch (err: any) {
       alert(err.message || '操作失败');
@@ -224,7 +231,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const res = await apiFetch(`${API_BASE}/profiles/${id}`, { method: 'DELETE' });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || '删除失败');
-      await onRefreshConfig();
+      onUpdateProfiles(prev => prev.filter(p => p.id !== id));
     } catch (err: any) {
       alert(err.message || '删除失败');
     }
@@ -238,8 +245,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
       const res = await apiFetch(`${API_BASE}/profiles/${id}/refresh-token`, { method: 'POST' });
       const data = await res.json();
       if (!data.success) throw new Error(data.message || '重置失败');
-      await onRefreshConfig();
-      return data.data?.token || null;
+      const updatedProfile = data.data;
+      if (updatedProfile) {
+        onUpdateProfiles(prev => prev.map(p => p.id === id ? updatedProfile : p));
+        return updatedProfile.token || null;
+      }
+      return null;
     } catch (err: any) {
       alert(err.message || '重置失败');
       return null;

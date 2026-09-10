@@ -17,6 +17,7 @@ import {
   ConfigTemplate,
   ProxyGroupItem,
   UnifiedRuleItem,
+  SubscriptionProfile,
 } from './types';
 
 const API_BASE = '/api';
@@ -384,6 +385,16 @@ export function App() {
     return <LoginView onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const handleUpdateProfiles = (updater: (prevProfiles: SubscriptionProfile[]) => SubscriptionProfile[]) => {
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        profiles: updater(prev.profiles || []),
+      };
+    });
+  };
+
   return (
     <div className="min-h-screen bg-[#FAF8F5] text-[#2D2B28] flex flex-col selection:bg-[#E8D7C7] selection:text-[#1F1E1D]">
       <Header
@@ -408,6 +419,7 @@ export function App() {
             nodes={nodes}
             onNavigateTab={setActiveTab}
             onRefreshConfig={fetchData}
+            onUpdateProfiles={handleUpdateProfiles}
           />
         )}
 
