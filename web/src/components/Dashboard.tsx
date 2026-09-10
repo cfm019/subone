@@ -28,8 +28,18 @@ import {
   ProxyNode,
   SubscriptionProfile,
   ConfigTemplate,
+  ClientType,
 } from '../types';
 import { apiFetch, API_BASE } from '../api';
+
+export const CLIENT_CONFIG_OPTIONS: { type: ClientType; label: string }[] = [
+  { type: 'singbox', label: 'Sing-box' },
+  { type: 'mihomo', label: 'Mihomo / Clash' },
+  { type: 'loon', label: 'Loon' },
+  { type: 'quantumultx', label: 'Quantumult X' },
+  { type: 'egern', label: 'Egern' },
+  { type: 'shadowrocket', label: 'Shadowrocket' },
+];
 
 function generateRandomSubToken(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -520,16 +530,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <span>{ruleCount} 条分流</span>
                   </span>
 
-                  {prof.templates?.mihomo && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FAF8F5] text-[11px] text-[#69655E]">
-                      Mihomo定制模版
-                    </span>
-                  )}
-                  {prof.templates?.singbox && (
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FAF8F5] text-[11px] text-[#69655E]">
-                      Singbox定制模版
-                    </span>
-                  )}
+                  {CLIENT_CONFIG_OPTIONS.map(c => {
+                    const tplId = prof.templates?.[c.type];
+                    if (!tplId) return null;
+                    const tpl = config?.templates?.find(t => t.id === tplId);
+                    return (
+                      <span
+                        key={c.type}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-[#FAF8F5] border border-[#ECE7DE] text-[11px] text-[#69655E]"
+                        title={`${c.label} 独立绑定: ${tpl?.name || tplId}`}
+                      >
+                        <span className="text-[#8C877D]">{c.label}:</span>
+                        <span className="text-[#2D2B28] font-medium">{tpl?.name || '指定模版'}</span>
+                      </span>
+                    );
+                  })}
                 </div>
 
                 {/* 底部行：订阅链接与下拉组合复制 */}
@@ -849,6 +864,14 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   const filter = profile.nodeFilter || { mode: 'all', selectedNodeIds: [] };
   const selectedNodeSet = useMemo(() => new Set(filter.selectedNodeIds || []), [filter.selectedNodeIds]);
 
+  const customizedClients = useMemo(() => {
+    return CLIENT_CONFIG_OPTIONS.filter(c => !!profile.templates?.[c.type]);
+  }, [profile.templates]);
+
+  const availableClients = useMemo(() => {
+    return CLIENT_CONFIG_OPTIONS.filter(c => !profile.templates?.[c.type]);
+  }, [profile.templates]);
+
   // Candidates based on search & country
   const candidateNodes = useMemo(() => {
     return nodes.filter(n => {
@@ -1145,125 +1168,114 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                 </div>
               </div>
 
-              {/* 模版选择 */}
-              <div className="pt-3 border-t border-[#ECE7DE] space-y-3.5">
-                <div>
-                  <h4 className="text-xs font-bold text-[#1F1E1D]">模版绑定</h4>
+              {/* 模版绑定：按需覆盖模式 */}
+              <div className="pt-3 border-t border-[#ECE7DE] space-y-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h4 className="text-xs font-bold text-[#1F1E1D]">客户端模版绑定</h4>
+                    <p className="text-[11px] text-[#8C877D] mt-0.5">
+                      默认继承系统全局模版；仅在需要时为特定客户端单独指定模版。
+                    </p>
+                  </div>
+
+                  {availableClients.length > 0 && (
+                    <div className="shrink-0">
+                      <select
+                        value=""
+                        onChange={e => {
+                          const cType = e.target.value as ClientType;
+                          if (!cType) return;
+                          const defaultTpl = config?.templates?.find(t => t.type === cType && t.isDefault)
+                            || config?.templates?.find(t => t.type === cType);
+                          onChangeProfile(prev => prev ? {
+                            ...prev,
+                            templates: {
+                              ...(prev.templates || {}),
+                              [cType]: defaultTpl?.id || ''
+                            }
+                          } : prev);
+                        }}
+                        className="px-2.5 py-1.5 bg-white hover:bg-[#FAF8F5] border border-[#CC785C]/40 text-[#CC785C] rounded-lg text-xs font-medium cursor-pointer transition-colors shadow-2xs focus:outline-none"
+                      >
+                        <option value="" disabled>+ 绑定指定客户端</option>
+                        {availableClients.map(c => (
+                          <option key={c.type} value={c.type}>
+                            {c.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs text-[#69655E] font-medium">Mihomo / Clash 模版</label>
-                  <select
-                    value={profile.templates?.mihomo || ''}
-                    onChange={e => onChangeProfile(prev => prev ? {
-                      ...prev,
-                      templates: { ...(prev.templates || {}), mihomo: e.target.value || undefined }
-                    } : prev)}
-                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
-                  >
-                    <option value="">跟随系统默认模版</option>
-                    {(config?.templates || []).filter(t => t.type === 'mihomo').map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.isDefault ? '(系统默认)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                {customizedClients.length === 0 ? (
+                  <div className="p-3 bg-[#FAF8F5] border border-[#ECE7DE] rounded-xl text-xs text-[#69655E] flex items-center justify-between">
+                    <span>当前所有客户端均跟随系统全局默认模版</span>
+                    <span className="text-[11px] text-[#8C877D]">未单独定制</span>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {customizedClients.map(c => {
+                      const clientTemplates = (config?.templates || []).filter(t => t.type === c.type);
+                      const currentTplId = profile.templates?.[c.type] || '';
 
-                <div className="space-y-1.5">
-                  <label className="text-xs text-[#69655E] font-medium">Sing-box 模版</label>
-                  <select
-                    value={profile.templates?.singbox || ''}
-                    onChange={e => onChangeProfile(prev => prev ? {
-                      ...prev,
-                      templates: { ...(prev.templates || {}), singbox: e.target.value || undefined }
-                    } : prev)}
-                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
-                  >
-                    <option value="">跟随系统默认模版</option>
-                    {(config?.templates || []).filter(t => t.type === 'singbox').map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.isDefault ? '(系统默认)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                      return (
+                        <div
+                          key={c.type}
+                          className="p-3 bg-white border border-[#E3DDD2] rounded-xl flex items-center gap-3 transition-colors shadow-2xs"
+                        >
+                          <div className="w-32 shrink-0">
+                            <span className="text-xs font-semibold text-[#1F1E1D] block">{c.label}</span>
+                            <span className="text-[10px] text-[#8C877D]">独立指定模版</span>
+                          </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs text-[#69655E] font-medium">Loon 模版</label>
-                  <select
-                    value={profile.templates?.loon || ''}
-                    onChange={e => onChangeProfile(prev => prev ? {
-                      ...prev,
-                      templates: { ...(prev.templates || {}), loon: e.target.value || undefined }
-                    } : prev)}
-                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
-                  >
-                    <option value="">跟随系统默认模版</option>
-                    {(config?.templates || []).filter(t => t.type === 'loon').map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.isDefault ? '(系统默认)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                          <div className="flex-1 min-w-0">
+                            <select
+                              value={currentTplId}
+                              onChange={e => {
+                                const val = e.target.value;
+                                onChangeProfile(prev => prev ? {
+                                  ...prev,
+                                  templates: {
+                                    ...(prev.templates || {}),
+                                    [c.type]: val || undefined
+                                  }
+                                } : prev);
+                              }}
+                              className="w-full px-3 py-1.5 bg-[#FAF8F5] border border-[#E3DDD2] rounded-lg text-xs text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
+                            >
+                              {clientTemplates.map(t => (
+                                <option key={t.id} value={t.id}>
+                                  {t.name} {t.isDefault ? '(系统默认)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-xs text-[#69655E] font-medium">Quantumult X 模版</label>
-                  <select
-                    value={profile.templates?.quantumultx || ''}
-                    onChange={e => onChangeProfile(prev => prev ? {
-                      ...prev,
-                      templates: { ...(prev.templates || {}), quantumultx: e.target.value || undefined }
-                    } : prev)}
-                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
-                  >
-                    <option value="">跟随系统默认模版</option>
-                    {(config?.templates || []).filter(t => t.type === 'quantumultx').map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.isDefault ? '(系统默认)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              onChangeProfile(prev => {
+                                if (!prev) return prev;
+                                const nextTemplates = { ...(prev.templates || {}) };
+                                delete nextTemplates[c.type];
+                                return { ...prev, templates: nextTemplates };
+                              });
+                            }}
+                            className="px-2.5 py-1.5 text-xs text-[#8C877D] hover:text-[#C5534A] hover:bg-[#FDF2F0] rounded-lg transition-colors shrink-0 cursor-pointer"
+                            title="恢复跟随系统默认模版"
+                          >
+                            恢复默认
+                          </button>
+                        </div>
+                      );
+                    })}
 
-                <div className="space-y-1.5">
-                  <label className="text-xs text-[#69655E] font-medium">Egern 模版</label>
-                  <select
-                    value={profile.templates?.egern || ''}
-                    onChange={e => onChangeProfile(prev => prev ? {
-                      ...prev,
-                      templates: { ...(prev.templates || {}), egern: e.target.value || undefined }
-                    } : prev)}
-                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
-                  >
-                    <option value="">跟随系统默认模版</option>
-                    {(config?.templates || []).filter(t => t.type === 'egern').map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.isDefault ? '(系统默认)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs text-[#69655E] font-medium">Shadowrocket 模版</label>
-                  <select
-                    value={profile.templates?.shadowrocket || ''}
-                    onChange={e => onChangeProfile(prev => prev ? {
-                      ...prev,
-                      templates: { ...(prev.templates || {}), shadowrocket: e.target.value || undefined }
-                    } : prev)}
-                    className="w-full px-3.5 py-2 bg-[#FAF8F5] border border-[#E3DDD2] rounded-xl text-xs text-[#1F1E1D]"
-                  >
-                    <option value="">跟随系统默认模版</option>
-                    {(config?.templates || []).filter(t => t.type === 'shadowrocket').map(t => (
-                      <option key={t.id} value={t.id}>
-                        {t.name} {t.isDefault ? '(系统默认)' : ''}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <div className="text-[11px] text-[#8C877D] px-1 pt-0.5">
+                      其余未绑定的客户端自动跟随系统全局默认模版。
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
