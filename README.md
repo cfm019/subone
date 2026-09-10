@@ -1,13 +1,13 @@
 # SubOne
 
-多节点与多订阅聚合服务，支持维护策略组与自定义分流规则、渲染模版生成各客户端配置并下发。兼容 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
+多节点与多订阅聚合服务，支持维护策略组与自定义分流规则、渲染模版生成各客户端配置并下发。目标格式目前支持 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
 
 
 ## 主要特性
 
-- **多订阅配置（Profile）**：
-  - 支持创建多个独立订阅，各拥有独立 Token 链接；
-  - 每个订阅可按需勾选关联机场源节点、自选策略组、分流规则及专属配置模版；
+- **多 Profile **：
+  - 在 subone 中管理多个 Profile，如手机、笔记本、台机、旁路由，可能使用不同的客户端，相应使用不同的配置，每个 Profile 各自使用一个 Token 链接；
+  - 每个 Profile 可按需勾选不同源节点、自选策略组、分流规则及各自的模版；
 - **节点与订阅聚合**：
   - 支持导入各类机场订阅，提取节点并按地区或关键字筛选分组；
   - 支持添加自建独立节点，支持单条/批量 URI、Clash YAML、Sing-box JSON 格式录入与智能解析；
@@ -19,7 +19,7 @@
   - 本地规则：CIDR、DOMAIN、DOMAIN-SUFFIX、DOMAIN-KEYWORD 等；
   - 远程规则集：GeoSite / GeoIP / SRS / MRS 统一管理与去向分流；
 - **模版与客户端分发**：
-  - 支持 **Sing-box**、**Mihomo (Clash)**、**Loon**、**Quantumult X**、**Egern**、**Shadowrocket** 6 类客户端；
+  - 支持 **Sing-box**、**Mihomo (Clash)**、**Loon**、**Quantumult X**、**Egern**、**Shadowrocket** 等客户端；
   - 默认提供各客户端规范模版，支持自定义模版扩展；
   - 根据客户端 User-Agent 智能识别分发，亦可通过路径或参数显式获取对应格式或 Base64 纯节点列表。
 
