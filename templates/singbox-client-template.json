@@ -127,6 +127,7 @@
       },
       {
         "protocol": "quic",
+        "port": 443,
         "action": "reject"
       },
       {
