@@ -108,7 +108,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     use: [],
     filter: '',
     tolerance: 50,
-    url: 'https://www.gstatic.com/generate_204',
+    url: 'https://www.google.com/generate_204',
     interval: 300,
   });
 
@@ -149,7 +149,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
       use: [],
       filter: '',
       tolerance: 50,
-      url: 'https://www.gstatic.com/generate_204',
+      url: 'https://www.google.com/generate_204',
       interval: 300,
     });
     setCustomProxyInput('');

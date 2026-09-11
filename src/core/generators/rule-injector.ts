@@ -68,7 +68,7 @@ export function injectUnifiedToMihomo(
         path: `./proxy_providers/${safePathName}.yaml`,
         'health-check': {
           enable: true,
-          url: 'https://www.gstatic.com/generate_204',
+          url: 'https://www.google.com/generate_204',
           interval: 300,
         },
       };
@@ -124,7 +124,7 @@ export function injectUnifiedToMihomo(
     };
 
     if (groupType === 'url-test' || groupType === 'fallback') {
-      grpObj.url = grp.url || 'https://www.gstatic.com/generate_204';
+      grpObj.url = grp.url || 'https://www.google.com/generate_204';
       grpObj.interval = grp.interval || 300;
       grpObj.tolerance = grp.tolerance || 50;
     }
@@ -308,7 +308,7 @@ export function injectUnifiedToSingbox(
         use: [info.sourceName],
         tolerance: 50,
         interval: 300,
-        url: 'https://www.gstatic.com/generate_204',
+        url: 'https://www.google.com/generate_204',
       };
       effectiveGroups.push(srcGroup);
       existingGroupNames.add(info.groupTag.toLowerCase());
@@ -421,8 +421,8 @@ export function injectUnifiedToSingbox(
         tag: grp.name,
         type: 'urltest',
         outbounds: outboundsList,
+        url: grp.url || 'https://www.google.com/generate_204',
       };
-      if (grp.url) urltestOutbound.url = grp.url;
       if (grp.interval) urltestOutbound.interval = typeof grp.interval === 'number' ? `${grp.interval}s` : grp.interval;
       if (typeof grp.tolerance === 'number') urltestOutbound.tolerance = grp.tolerance;
       groupOutbounds.push(urltestOutbound);
@@ -767,10 +767,10 @@ export function injectUnifiedToLoon(
           matched = [];
         }
         const members = matched.length > 0 ? matched : ['DIRECT'];
-        groupLines.push(`${grp.name} = ${groupType}, ${members.join(', ')}, url=https://www.gstatic.com/generate_204, interval=300, tolerance=${grp.tolerance || 50}`);
+        groupLines.push(`${grp.name} = ${groupType}, ${members.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
       } else {
         const filterTag = getLoonFilterTag(grp);
-        groupLines.push(`${grp.name} = ${groupType}, ${filterTag}, url=https://www.gstatic.com/generate_204, interval=300, tolerance=${grp.tolerance || 50}`);
+        groupLines.push(`${grp.name} = ${groupType}, ${filterTag}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
       }
       return;
     }
@@ -779,7 +779,7 @@ export function injectUnifiedToLoon(
       const members = expandNodes
         ? (allNodeNames.length > 0 ? allNodeNames : ['DIRECT'])
         : ['全部节点', ...customNodeNames];
-      groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=https://www.gstatic.com/generate_204, interval=300, tolerance=${grp.tolerance || 50}`);
+      groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
       return;
     }
 
@@ -801,14 +801,14 @@ export function injectUnifiedToLoon(
           .map(n => n.name.replace(/[=,]/g, '_'));
         const members = srcNodes.length > 0 ? srcNodes : ['DIRECT'];
         if (groupType === 'url-test') {
-          groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=https://www.gstatic.com/generate_204, interval=300, tolerance=${grp.tolerance || 50}`);
+          groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
         } else {
           groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
         }
       } else {
         const sTag = matchedSource.name.replace(/[=,]/g, '_').trim();
         if (groupType === 'url-test') {
-          groupLines.push(`${grp.name} = url-test, ${sTag}, url=https://www.gstatic.com/generate_204, interval=300, tolerance=${grp.tolerance || 50}`);
+          groupLines.push(`${grp.name} = url-test, ${sTag}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
         } else {
           groupLines.push(`${grp.name} = select, ${sTag}`);
         }
@@ -890,9 +890,9 @@ export function injectUnifiedToLoon(
           .filter(n => n.sourceName === s.name || n.sourceId === s.id)
           .map(n => n.name.replace(/[=,]/g, '_'));
         const members = srcNodes.length > 0 ? srcNodes : ['DIRECT'];
-        groupLines.push(`${grpTag} = url-test, ${members.join(', ')}, url=https://www.gstatic.com/generate_204, interval=300, tolerance=50`);
+        groupLines.push(`${grpTag} = url-test, ${members.join(', ')}, url=https://www.google.com/generate_204, interval=300, tolerance=50`);
       } else {
-        groupLines.push(`${grpTag} = url-test, ${sTag}, url=https://www.gstatic.com/generate_204, interval=300, tolerance=50`);
+        groupLines.push(`${grpTag} = url-test, ${sTag}, url=https://www.google.com/generate_204, interval=300, tolerance=50`);
       }
     }
   });
@@ -1300,7 +1300,7 @@ export function injectUnifiedToEgern(
       generatedGroups.push({
         name: grp.name,
         type: groupType,
-        url: grp.url || 'https://www.gstatic.com/generate_204',
+        url: grp.url || 'https://www.google.com/generate_204',
         interval: grp.interval || 300,
         tolerance: grp.tolerance || 50,
         proxies,
@@ -1312,7 +1312,7 @@ export function injectUnifiedToEgern(
       generatedGroups.push({
         name: grp.name,
         type: 'url-test',
-        url: grp.url || 'https://www.gstatic.com/generate_204',
+        url: grp.url || 'https://www.google.com/generate_204',
         interval: 300,
         tolerance: 50,
         proxies: allNodeNames.length > 0 ? allNodeNames : ['DIRECT'],

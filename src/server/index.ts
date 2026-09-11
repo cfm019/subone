@@ -521,7 +521,7 @@ app.post('/api/sources', async (req, res) => {
         use: [sourceName],
         tolerance: 50,
         interval: 300,
-        url: 'https://www.gstatic.com/generate_204',
+        url: 'https://www.google.com/generate_204',
       };
       appConfig.proxyGroups.push(newGroup);
 
@@ -742,7 +742,7 @@ app.post('/api/groups/generate-country-presets', (req, res) => {
         use: [srcName],
         tolerance: 50,
         interval: 300,
-        url: 'https://www.gstatic.com/generate_204',
+        url: 'https://www.google.com/generate_204',
       };
       appConfig.proxyGroups.push(srcGroup);
       existingNames.add(groupTag);
