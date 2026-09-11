@@ -182,6 +182,14 @@
           "fe80::/10"
         ],
         "outbound": "🎯 本地直连"
+      },
+      {
+        "clash_mode": "Direct",
+        "outbound": "🎯 本地直连"
+      },
+      {
+        "clash_mode": "Global",
+        "outbound": "GLOBAL"
       }
     ],
     "rule_set": [

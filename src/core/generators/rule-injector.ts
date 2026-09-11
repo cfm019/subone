@@ -468,6 +468,21 @@ export function injectUnifiedToSingbox(
     });
   }
 
+  // Ensure GLOBAL selector exists for Clash API Global mode
+  const hasGlobal = groupOutbounds.some(g => g.tag === 'GLOBAL') ||
+                    customTemplateOutbounds.some(g => g.tag === 'GLOBAL');
+  if (!hasGlobal) {
+    const mainSelectorTag = effectiveGroups.find(g => g.name === '🚀 节点选择')?.name ||
+                            effectiveGroups[0]?.name ||
+                            '🎯 本地直连';
+    const globalOutbounds = Array.from(new Set([mainSelectorTag, ...allNodeTags]));
+    groupOutbounds.unshift({
+      tag: 'GLOBAL',
+      type: 'selector',
+      outbounds: globalOutbounds.length > 0 ? globalOutbounds : ['🎯 本地直连'],
+    });
+  }
+
   doc.outbounds = [...groupOutbounds, ...customTemplateOutbounds, ...proxyOutbounds];
 
   // 2. Build Remote Rule Sets
@@ -618,6 +633,15 @@ export function injectUnifiedToSingbox(
     { action: 'sniff' },
     { ip_is_private: true, outbound: '🎯 本地直连' },
   ];
+
+  // Ensure route.rules has clash_mode control rules
+  const hasClashMode = baseRules.some((r: any) => r.clash_mode);
+  if (!hasClashMode) {
+    baseRules.push(
+      { clash_mode: 'Direct', outbound: '🎯 本地直连' },
+      { clash_mode: 'Global', outbound: 'GLOBAL' }
+    );
+  }
 
   const availableGroupNames = new Set(effectiveGroups.map(g => g.name));
   const fallbackGroup = effectiveGroups.find(g => g.name === '🚀 节点选择')?.name || effectiveGroups[0]?.name || '🎯 本地直连';
