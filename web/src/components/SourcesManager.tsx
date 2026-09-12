@@ -45,6 +45,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   const [newType, setNewType] = useState('auto');
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCustomSubmitting, setIsCustomSubmitting] = useState(false);
 
   const customSource = sources.find(s => s.id === 'custom');
   const customNodes = customSource?.nodes || [];
@@ -68,10 +69,17 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
   const handleCustomSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!customText.trim()) return;
-    await onImportCustomNodes(customText, customReplaceAll);
-    setCustomText('');
-    setShowCustomModal(false);
+    if (!customText.trim() || isCustomSubmitting) return;
+    setIsCustomSubmitting(true);
+    try {
+      await onImportCustomNodes(customText, customReplaceAll);
+      setCustomText('');
+      setShowCustomModal(false);
+    } catch (err: any) {
+      alert(err.message || '导入独立节点失败');
+    } finally {
+      setIsCustomSubmitting(false);
+    }
   };
 
   const handleSingleRefresh = async (id: string) => {
@@ -316,9 +324,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-xs font-semibold btn-claude-primary rounded-xl"
+                  disabled={isCustomSubmitting}
+                  className="px-5 py-2 text-xs font-semibold btn-claude-primary rounded-xl disabled:opacity-50 cursor-pointer shadow-2xs"
                 >
-                  解析并导入
+                  {isCustomSubmitting ? '正在解析导入...' : '解析并导入'}
                 </button>
               </div>
             </form>

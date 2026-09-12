@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
 import { loadConfig, saveConfig, generateRandomSubToken, saveServerConfig } from '../storage/db.js';
-import { fetchAndParseSource } from '../core/parser/fetcher.js';
+import { fetchAndParseSource, parseRawContent } from '../core/parser/fetcher.js';
 import { applyExtractionRules } from '../core/filter/extractor.js';
 import { generateMihomoConfig } from '../core/generators/mihomo-generator.js';
 import { generateSingboxConfig } from '../core/generators/singbox-generator.js';
@@ -397,7 +397,6 @@ app.post('/api/custom-nodes/import', (req, res) => {
     return res.status(400).json({ success: false, message: 'Text content required' });
   }
 
-  const { parseRawContent } = require('../core/parser/fetcher.js');
   const parsedNodes: ProxyNode[] = parseRawContent(text, 'custom', '独立节点组', undefined, appConfig.countryRules);
 
   if (parsedNodes.length === 0) {
@@ -419,7 +418,13 @@ app.post('/api/custom-nodes/import', (req, res) => {
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
 
-  res.json({ success: true, count: customSrc.nodes.length, added: parsedNodes.length, data: customSrc.nodes });
+  res.json({
+    success: true,
+    count: customSrc.nodes.length,
+    added: parsedNodes.length,
+    data: customSrc.nodes,
+    proxyGroups: appConfig.proxyGroups,
+  });
 });
 
 app.post('/api/custom-nodes', (req, res) => {
@@ -443,7 +448,12 @@ app.post('/api/custom-nodes', (req, res) => {
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
 
-  res.json({ success: true, data: newNode });
+  res.json({
+    success: true,
+    data: newNode,
+    count: customSrc.nodes.length,
+    proxyGroups: appConfig.proxyGroups,
+  });
 });
 
 app.put('/api/custom-nodes/:id', (req, res) => {
@@ -465,7 +475,7 @@ app.delete('/api/custom-nodes/:id', (req, res) => {
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
 
-  res.json({ success: true, message: 'Node deleted' });
+  res.json({ success: true, count: customSrc.nodes.length, data: customSrc.nodes, message: 'Node deleted' });
 });
 
 // 3. Network Sources Management (网络订阅源)

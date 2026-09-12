@@ -167,17 +167,79 @@ export function App() {
 
   // Custom Nodes handlers
   const handleImportCustomNodes = async (text: string, replaceAll?: boolean) => {
-    const res = await apiFetch(`${API_BASE}/custom-nodes/import`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, replaceAll }),
-    });
-    if (res.ok) await fetchData();
+    try {
+      const res = await apiFetch(`${API_BASE}/custom-nodes/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, replaceAll }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || (json && json.success === false)) {
+        const msg = json?.message || `导入独立节点失败 (HTTP ${res.status})`;
+        setErrorMsg(msg);
+        throw new Error(msg);
+      }
+
+      if (json?.data) {
+        // Direct local state update from response (0 redundant network payload)
+        setConfig(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            sources: (prev.sources || []).map(s => {
+              if (s.id === 'custom') {
+                return {
+                  ...s,
+                  nodes: json.data,
+                  nodeCount: json.count ?? json.data.length,
+                };
+              }
+              return s;
+            }),
+            proxyGroups: json.proxyGroups || prev.proxyGroups,
+          };
+        });
+        // Background sync effective nodes without blocking UI
+        fetchNodesOnly();
+      } else {
+        await fetchData();
+      }
+    } catch (err: any) {
+      console.error('handleImportCustomNodes error:', err);
+      throw err;
+    }
   };
 
   const handleDeleteCustomNode = async (id: string) => {
-    const res = await apiFetch(`${API_BASE}/custom-nodes/${id}`, { method: 'DELETE' });
-    if (res.ok) await fetchData();
+    // 0ms Optimistic UI update: immediately remove from UI list & badge count
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        sources: (prev.sources || []).map(s => {
+          if (s.id === 'custom') {
+            const nextNodes = (s.nodes || []).filter(n => n.id !== id);
+            return {
+              ...s,
+              nodes: nextNodes,
+              nodeCount: nextNodes.length,
+            };
+          }
+          return s;
+        }),
+      };
+    });
+    setNodes(prev => (prev || []).filter(n => n.id !== id));
+
+    try {
+      const res = await apiFetch(`${API_BASE}/custom-nodes/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        await fetchData();
+      }
+    } catch (err) {
+      console.error('handleDeleteCustomNode error:', err);
+      await fetchData();
+    }
   };
 
   // Sources handlers
@@ -209,24 +271,36 @@ export function App() {
   };
 
   const handleUpdateSource = async (id: string, updates: Partial<SubscriptionSource>) => {
+    setConfig(prev => prev ? {
+      ...prev,
+      sources: (prev.sources || []).map(s => s.id === id ? { ...s, ...updates } : s),
+    } : prev);
+
     try {
       const res = await apiFetch(`${API_BASE}/sources/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (res.ok) await fetchData();
+      if (!res.ok) await fetchConfigOnly();
     } catch (err: any) {
       console.error('handleUpdateSource error:', err);
+      await fetchConfigOnly();
     }
   };
 
   const handleDeleteSource = async (id: string) => {
+    setConfig(prev => prev ? {
+      ...prev,
+      sources: (prev.sources || []).filter(s => s.id !== id),
+    } : prev);
+
     try {
       const res = await apiFetch(`${API_BASE}/sources/${id}`, { method: 'DELETE' });
-      if (res.ok) await fetchData();
+      if (!res.ok) await fetchConfigOnly();
     } catch (err: any) {
       console.error('handleDeleteSource error:', err);
+      await fetchConfigOnly();
     }
   };
 
