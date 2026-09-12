@@ -110,8 +110,10 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
 
   const handleFullTextSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    await onBatchReplaceRules(fullRulesText, proxyGroups[0]?.name || '🎯 本地直连');
+    const text = fullRulesText;
+    const outbound = proxyGroups[0]?.name || '🎯 本地直连';
     setShowFullTextModal(false);
+    await onBatchReplaceRules(text, outbound);
   };
 
   const handleSingleAdd = async (e: React.FormEvent) => {
@@ -124,18 +126,20 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
 
     if (!formattedPayload) return;
 
-    await onAddRule({
+    const newRuleData = {
       name: singleName.trim() || `${singleType}: ${formattedPayload.slice(0, 30)}${formattedPayload.length > 30 ? '...' : ''}`,
       kind: singleKind,
       type: singleKind === 'remote' ? 'RULE-SET' : singleType,
       payload: formattedPayload,
       outbound: singleOutbound,
       enabled: true,
-    });
+    };
 
     setSingleName('');
     setSinglePayload('');
     setShowAddSingleModal(false);
+
+    await onAddRule(newRuleData);
   };
 
   // Edit Single Rule modal
@@ -165,15 +169,19 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
 
     if (!formattedPayload) return;
 
-    await onUpdateRule(editingRule.id, {
+    const ruleId = editingRule.id;
+    const updates = {
       name: editName.trim() || `${editType}: ${formattedPayload.slice(0, 30)}`,
       kind: editKind,
       type: editKind === 'remote' ? 'RULE-SET' : editType,
       payload: formattedPayload,
       outbound: editOutbound,
-    });
+    };
 
+    // Close modal immediately for instant 0ms response
     setEditingRule(null);
+
+    await onUpdateRule(ruleId, updates);
   };
 
   // Filter rules

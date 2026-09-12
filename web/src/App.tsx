@@ -71,6 +71,30 @@ export function App() {
     }
   };
 
+  const fetchConfigOnly = async () => {
+    try {
+      const res = await apiFetch(`${API_BASE}/config`);
+      if (res.ok) {
+        const cJson = await res.json();
+        setConfig(cJson.data);
+      }
+    } catch (e: any) {
+      console.error('Failed to reload config:', e);
+    }
+  };
+
+  const fetchNodesOnly = async () => {
+    try {
+      const res = await apiFetch(`${API_BASE}/nodes`);
+      if (res.ok) {
+        const nJson = await res.json();
+        setNodes(nJson.data || []);
+      }
+    } catch (e: any) {
+      console.error('Failed to reload nodes:', e);
+    }
+  };
+
   const fetchData = async () => {
     try {
       const [configRes, nodesRes] = await Promise.all([
@@ -230,7 +254,14 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(group),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json?.data) {
+        setConfig(prev => prev ? { ...prev, proxyGroups: [...(prev.proxyGroups || []), json.data] } : prev);
+      } else {
+        await fetchConfigOnly();
+      }
+    }
   };
 
   const handleBatchImportGroups = async (text: string, replaceAll?: boolean) => {
@@ -239,21 +270,62 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, replaceAll }),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json?.data) {
+        setConfig(prev => prev ? { ...prev, proxyGroups: json.data } : prev);
+      } else {
+        await fetchConfigOnly();
+      }
+    }
   };
 
   const handleUpdateGroup = async (id: string, updates: Partial<ProxyGroupItem>) => {
-    const res = await apiFetch(`${API_BASE}/groups/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+    // Optimistic update for instant UI feedback
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        proxyGroups: (prev.proxyGroups || []).map(g => g.id === id ? { ...g, ...updates } : g),
+      };
     });
-    if (res.ok) await fetchData();
+
+    try {
+      const res = await apiFetch(`${API_BASE}/groups/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json?.data) {
+          setConfig(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              proxyGroups: (prev.proxyGroups || []).map(g => g.id === id ? json.data : g),
+            };
+          });
+        }
+      } else {
+        await fetchConfigOnly();
+      }
+    } catch (err) {
+      console.error('Failed to update group:', err);
+      await fetchConfigOnly();
+    }
   };
 
   const handleDeleteGroup = async (id: string) => {
+    setConfig(prev => prev ? {
+      ...prev,
+      proxyGroups: (prev.proxyGroups || []).filter(g => g.id !== id),
+    } : prev);
+
     const res = await apiFetch(`${API_BASE}/groups/${id}`, { method: 'DELETE' });
-    if (res.ok) await fetchData();
+    if (!res.ok) {
+      await fetchConfigOnly();
+    }
   };
 
   // Unified Rules handlers
@@ -263,7 +335,14 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(rule),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json?.data) {
+        setConfig(prev => prev ? { ...prev, rulesList: [...(prev.rulesList || []), json.data] } : prev);
+      } else {
+        await fetchConfigOnly();
+      }
+    }
   };
 
   const handleImportLocalRules = async (text: string, defaultOutbound?: string) => {
@@ -272,7 +351,14 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, defaultOutbound }),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json?.data) {
+        setConfig(prev => prev ? { ...prev, rulesList: json.data } : prev);
+      } else {
+        await fetchConfigOnly();
+      }
+    }
   };
 
   const handleImportRemoteRules = async (text: string, defaultOutbound?: string) => {
@@ -281,7 +367,14 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, defaultOutbound }),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json?.data) {
+        setConfig(prev => prev ? { ...prev, rulesList: json.data } : prev);
+      } else {
+        await fetchConfigOnly();
+      }
+    }
   };
 
   const handleBatchReplaceRules = async (text: string, defaultOutbound?: string) => {
@@ -290,26 +383,77 @@ export function App() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text, defaultOutbound }),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json?.data) {
+        setConfig(prev => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            rulesList: json.data,
+            proxyGroups: json.groups || prev.proxyGroups,
+          };
+        });
+      } else {
+        await fetchConfigOnly();
+      }
+    }
   };
 
   const handleUpdateRule = async (id: string, updates: Partial<UnifiedRuleItem>) => {
-    const res = await apiFetch(`${API_BASE}/rules/unified/${id}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updates),
+    // Optimistic update for instant UI feedback
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        rulesList: (prev.rulesList || []).map(r => r.id === id ? { ...r, ...updates } : r),
+      };
     });
-    if (res.ok) await fetchData();
+
+    try {
+      const res = await apiFetch(`${API_BASE}/rules/unified/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json?.data) {
+          setConfig(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              rulesList: (prev.rulesList || []).map(r => r.id === id ? json.data : r),
+            };
+          });
+        }
+      } else {
+        await fetchConfigOnly();
+      }
+    } catch (err) {
+      console.error('Failed to update rule:', err);
+      await fetchConfigOnly();
+    }
   };
 
   const handleDeleteRule = async (id: string) => {
+    setConfig(prev => prev ? {
+      ...prev,
+      rulesList: (prev.rulesList || []).filter(r => r.id !== id),
+    } : prev);
+
     const res = await apiFetch(`${API_BASE}/rules/unified/${id}`, { method: 'DELETE' });
-    if (res.ok) await fetchData();
+    if (!res.ok) {
+      await fetchConfigOnly();
+    }
   };
 
   const handleClearAllRules = async () => {
+    setConfig(prev => prev ? { ...prev, rulesList: [] } : prev);
     const res = await apiFetch(`${API_BASE}/rules/unified/clear-all`, { method: 'POST' });
-    if (res.ok) await fetchData();
+    if (!res.ok) {
+      await fetchConfigOnly();
+    }
   };
 
   // Templates handlers
@@ -321,25 +465,50 @@ export function App() {
       body: JSON.stringify(template),
     });
     if (res.ok) {
-      const data = await res.json();
-      await fetchData();
-      return data.data;
+      const data = await res.json().catch(() => null);
+      if (data?.data) {
+        setConfig(prev => prev ? { ...prev, templates: [...(prev.templates || []), data.data] } : prev);
+        return data.data;
+      }
+      await fetchConfigOnly();
     }
     return undefined;
   };
 
   const handleUpdateTemplate = async (id: string, updates: Partial<ConfigTemplate>) => {
+    setConfig(prev => prev ? {
+      ...prev,
+      templates: (prev.templates || []).map(t => t.id === id ? { ...t, ...updates } : t),
+    } : prev);
+
     const res = await apiFetch(`${API_BASE}/templates/${id}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(updates),
     });
-    if (res.ok) await fetchData();
+    if (res.ok) {
+      const json = await res.json().catch(() => null);
+      if (json?.data) {
+        setConfig(prev => prev ? {
+          ...prev,
+          templates: (prev.templates || []).map(t => t.id === id ? json.data : t),
+        } : prev);
+      }
+    } else {
+      await fetchConfigOnly();
+    }
   };
 
   const handleDeleteTemplate = async (id: string) => {
+    setConfig(prev => prev ? {
+      ...prev,
+      templates: (prev.templates || []).filter(t => t.id !== id),
+    } : prev);
+
     const res = await apiFetch(`${API_BASE}/templates/${id}`, { method: 'DELETE' });
-    if (res.ok) await fetchData();
+    if (!res.ok) {
+      await fetchConfigOnly();
+    }
   };
 
   const handleResetTemplate = async (id: string): Promise<ConfigTemplate> => {
@@ -348,7 +517,12 @@ export function App() {
     if (!res.ok || !json.success) {
       throw new Error(json.message || json.error || '恢复默认模版失败');
     }
-    await fetchData();
+    if (json.data) {
+      setConfig(prev => prev ? {
+        ...prev,
+        templates: (prev.templates || []).map(t => t.id === id ? json.data : t),
+      } : prev);
+    }
     return json.data;
   };
 

@@ -179,11 +179,12 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     };
 
     if (editingGroup) {
-      await onUpdateGroup(editingGroup.id, payload);
+      const gid = editingGroup.id;
       setEditingGroup(null);
+      await onUpdateGroup(gid, payload);
     } else {
-      await onAddGroup(payload);
       setIsAdding(false);
+      await onAddGroup(payload);
     }
   };
 
@@ -250,8 +251,9 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
 
   const handleSaveYaml = async () => {
     if (!yamlText.trim()) return;
-    await onBatchImportGroups(yamlText, true);
+    const text = yamlText;
     setShowYamlModal(false);
+    await onBatchImportGroups(text, true);
   };
 
   // Helper to get node count for any outbound name (group, source, or standard)
