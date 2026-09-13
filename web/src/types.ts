@@ -10,6 +10,8 @@ export interface ProxyNode {
   countryEmoji?: string;
   network?: string;
   tls?: boolean;
+  raw?: string;
+  [key: string]: any;
 }
 
 export interface SubscriptionSource {

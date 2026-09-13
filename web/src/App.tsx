@@ -241,7 +241,8 @@ export function App() {
     }
   };
 
-  const handleUpdateCustomNode = async (id: string, updates: Partial<ProxyNode>) => {
+  const handleUpdateCustomNode = async (id: string, updates: Partial<ProxyNode> & { text?: string }) => {
+    // Optimistic UI update
     setConfig(prev => {
       if (!prev) return prev;
       return {
@@ -266,7 +267,28 @@ export function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!res.ok) {
+      if (res.ok) {
+        const json = await res.json().catch(() => null);
+        if (json?.data) {
+          const finalNode: ProxyNode = json.data;
+          setConfig(prev => {
+            if (!prev) return prev;
+            return {
+              ...prev,
+              sources: (prev.sources || []).map(s => {
+                if (s.nodes && s.nodes.some(n => n.id === id)) {
+                  return {
+                    ...s,
+                    nodes: s.nodes.map(n => (n.id === id ? finalNode : n)),
+                  };
+                }
+                return s;
+              }),
+            };
+          });
+          setNodes(prev => (prev || []).map(n => (n.id === id ? finalNode : n)));
+        }
+      } else {
         await fetchData();
       }
     } catch (err) {

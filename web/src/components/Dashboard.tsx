@@ -31,6 +31,7 @@ import {
   ClientType,
 } from '../types';
 import { apiFetch, API_BASE } from '../api';
+import { copyToClipboard } from '../utils/clipboard';
 
 export const CLIENT_CONFIG_OPTIONS: { type: ClientType; label: string }[] = [
   { type: 'singbox', label: 'Sing-box' },
@@ -111,10 +112,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [previewData]);
 
   // Copy helper
-  const handleCopy = (text: string, key: string) => {
-    navigator.clipboard.writeText(text);
-    setCopiedId(key);
-    setTimeout(() => setCopiedId(null), 2000);
+  const handleCopy = async (text: string, key: string) => {
+    const ok = await copyToClipboard(text);
+    if (ok) {
+      setCopiedId(key);
+      setTimeout(() => setCopiedId(null), 2000);
+    } else {
+      window.prompt('请手动复制：', text);
+    }
   };
 
   // Download helper
@@ -1126,11 +1131,15 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                   />
                   <button
                     type="button"
-                    onClick={() => {
+                    onClick={async () => {
                       if (profile.token) {
-                        navigator.clipboard.writeText(profile.token);
-                        setTokenCopied(true);
-                        setTimeout(() => setTokenCopied(false), 2000);
+                        const ok = await copyToClipboard(profile.token);
+                        if (ok) {
+                          setTokenCopied(true);
+                          setTimeout(() => setTokenCopied(false), 2000);
+                        } else {
+                          window.prompt('请手动复制 Token：', profile.token);
+                        }
                       }
                     }}
                     className="px-3 py-2.5 bg-white border border-[#E3DDD2] hover:bg-[#FAF8F5] text-xs font-medium text-[#1F1E1D] rounded-xl transition-colors flex items-center gap-1.5 cursor-pointer shrink-0"

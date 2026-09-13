@@ -477,11 +477,45 @@ app.post('/api/custom-nodes', (req, res) => {
 });
 
 const updateNodeHandler = (req: any, res: any) => {
+  const { name, text, rawContent, raw, ...directFields } = req.body || {};
+  const configText = (typeof text === 'string' ? text : typeof rawContent === 'string' ? rawContent : typeof raw === 'string' ? raw : '').trim();
+
   for (const s of appConfig.sources) {
     if (s.nodes) {
       const idx = s.nodes.findIndex(n => n.id === req.params.id);
       if (idx !== -1) {
-        s.nodes[idx] = { ...s.nodes[idx], ...req.body };
+        let updatedNode: ProxyNode = { ...s.nodes[idx], ...directFields };
+
+        // If configText is provided, parse it to extract protocol, server, port, security, etc.
+        if (configText) {
+          try {
+            const parsed = parseRawContent(configText, s.id, s.name, undefined, appConfig.countryRules);
+            if (parsed.length > 0) {
+              const newParsed = parsed[0];
+              updatedNode = {
+                ...s.nodes[idx],
+                ...newParsed,
+                id: req.params.id, // Preserve original unique node ID
+                sourceId: s.id,
+                sourceName: s.name,
+                raw: configText,
+                ...directFields,
+              };
+            } else {
+              updatedNode.raw = configText;
+            }
+          } catch (err: any) {
+            console.warn(`[NodeUpdate] Failed to parse config text for node ${req.params.id}:`, err.message);
+            updatedNode.raw = configText;
+          }
+        }
+
+        // If a new name is explicitly provided
+        if (name && typeof name === 'string' && name.trim()) {
+          updatedNode.name = name.trim();
+        }
+
+        s.nodes[idx] = updatedNode;
         saveConfig(appConfig);
         globalNodesCache = collectNodesFromSources(appConfig);
         return res.json({ success: true, data: s.nodes[idx] });

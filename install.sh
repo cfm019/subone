@@ -265,7 +265,7 @@ setup_config() {
         # 仅在交互式终端且有输入能力时等待输入端口，否则默认 3456
         if [ -t 0 ] && [ "$NON_INTERACTIVE" != "1" ]; then
             echo ""
-            read -t 10 -p "请输入 Web 服务运行端口 [回车默认 ${DEFAULT_PORT}]: " user_port || true
+            read -t 30 -p "请输入 Web 服务运行端口 [回车默认 ${DEFAULT_PORT}]: " user_port || true
             if [ -n "$user_port" ] && [[ "$user_port" =~ ^[0-9]+$ ]]; then
                 port="$user_port"
             fi

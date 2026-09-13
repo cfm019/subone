@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { SubscriptionSource, ProxyNode } from '../types';
 import { nodeToUri } from '../utils/nodeUri';
+import { copyToClipboard } from '../utils/clipboard';
 
 interface SourcesManagerProps {
   sources: SubscriptionSource[];
@@ -51,9 +52,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   const [renamingSource, setRenamingSource] = useState<SubscriptionSource | null>(null);
   const [newGroupNameInput, setNewGroupNameInput] = useState('');
 
-  // Node rename state
-  const [renamingNode, setRenamingNode] = useState<{ id: string; name: string } | null>(null);
-  const [newNodeNameInput, setNewNodeNameInput] = useState('');
+  // Node edit state (name & config text)
+  const [editingNode, setEditingNode] = useState<{ id: string; name: string; rawText: string } | null>(null);
+  const [editNodeNameInput, setEditNodeNameInput] = useState('');
+  const [editNodeTextInput, setEditNodeTextInput] = useState('');
 
   // Target group for importing nodes
   const [targetGroupId, setTargetGroupId] = useState<string>('custom');
@@ -179,19 +181,24 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
     }
   };
 
-  // Submit rename node
-  const handleRenameNodeSubmit = async (e: React.FormEvent) => {
+  // Submit edit node (name and configuration text)
+  const handleEditNodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!renamingNode || !newNodeNameInput.trim() || isSubmitting) return;
+    if (!editingNode || isSubmitting) return;
     setIsSubmitting(true);
     try {
       if (onUpdateCustomNode) {
-        await onUpdateCustomNode(renamingNode.id, { name: newNodeNameInput.trim() });
+        await onUpdateCustomNode(editingNode.id, {
+          name: editNodeNameInput.trim(),
+          text: editNodeTextInput.trim(),
+          raw: editNodeTextInput.trim(),
+        } as any);
       }
-      setRenamingNode(null);
-      setNewNodeNameInput('');
+      setEditingNode(null);
+      setEditNodeNameInput('');
+      setEditNodeTextInput('');
     } catch (err: any) {
-      alert(err.message || '重命名节点失败');
+      alert(err.message || '修改节点配置失败');
     } finally {
       setIsSubmitting(false);
     }
@@ -225,12 +232,20 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
     }
   };
 
-  // Copy node URI or info
-  const handleCopyNode = (node: ProxyNode) => {
-    const textToCopy = nodeToUri(node);
-    navigator.clipboard.writeText(textToCopy);
-    setCopiedNodeId(node.id);
-    setTimeout(() => setCopiedNodeId(null), 1500);
+  // Copy node URI or info (robust with fallback for HTTP / non-secure contexts)
+  const handleCopyNode = async (node: ProxyNode) => {
+    try {
+      const textToCopy = (typeof node.raw === 'string' && node.raw.trim()) ? node.raw.trim() : nodeToUri(node);
+      const ok = await copyToClipboard(textToCopy);
+      if (ok) {
+        setCopiedNodeId(node.id);
+        setTimeout(() => setCopiedNodeId(null), 1500);
+      } else {
+        window.prompt('请手动复制节点链接：', textToCopy);
+      }
+    } catch (err) {
+      console.error('handleCopyNode error:', err);
+    }
   };
 
   return (
@@ -538,11 +553,13 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
                             <button
                               onClick={() => {
-                                setRenamingNode({ id: node.id, name: node.name });
-                                setNewNodeNameInput(node.name);
+                                const uriText = (typeof node.raw === 'string' && node.raw.trim()) ? node.raw.trim() : nodeToUri(node);
+                                setEditingNode({ id: node.id, name: node.name, rawText: uriText });
+                                setEditNodeNameInput(node.name);
+                                setEditNodeTextInput(uriText);
                               }}
                               className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
-                              title="重命名此节点"
+                              title="修改节点与配置文本"
                             >
                               <Edit2 className="w-3.5 h-3.5" />
                             </button>
@@ -874,47 +891,71 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
           </div>
         </div>
       )}
-      {/* 重命名节点弹窗 */}
-      {renamingNode && (
+      {/* 编辑节点与配置文本弹窗 */}
+      {editingNode && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-[#FAF8F5] border border-[#E3DDD2] rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+          <div className="bg-[#FAF8F5] border border-[#E3DDD2] rounded-2xl p-5 max-w-lg w-full shadow-2xl space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-[#E8E2D8]">
-              <h3 className="text-sm font-bold text-[#1F1E1D]">修改节点名称</h3>
+              <div className="flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-[#CC785C]" />
+                <h3 className="text-sm font-bold text-[#1F1E1D]">编辑节点配置</h3>
+              </div>
               <button
-                onClick={() => setRenamingNode(null)}
-                className="text-xs text-[#9E9A91] hover:text-[#1F1E1D]"
+                onClick={() => setEditingNode(null)}
+                className="text-xs text-[#9E9A91] hover:text-[#1F1E1D] p-1 cursor-pointer"
               >
                 ✕
               </button>
             </div>
 
-            <form onSubmit={handleRenameNodeSubmit} className="space-y-3.5">
+            <form onSubmit={handleEditNodeSubmit} className="space-y-3.5">
               <div>
-                <label className="block text-xs font-semibold text-[#1F1E1D] mb-1">节点名称</label>
+                <label className="block text-xs font-semibold text-[#1F1E1D] mb-1">
+                  节点名称
+                </label>
                 <input
                   type="text"
                   required
-                  autoFocus
-                  value={newNodeNameInput}
-                  onChange={e => setNewNodeNameInput(e.target.value)}
+                  value={editNodeNameInput}
+                  onChange={e => setEditNodeNameInput(e.target.value)}
+                  placeholder="节点备注名称"
                   className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[#1F1E1D]">
+                    配置内容文本
+                  </label>
+                  <span className="text-[10px] text-[#8C877D]">支持修改 URI 链接 / 参数</span>
+                </div>
+                <textarea
+                  rows={5}
+                  value={editNodeTextInput}
+                  onChange={e => setEditNodeTextInput(e.target.value)}
+                  placeholder="vless://... 或 hysteria2://... 或 ss://... 等节点链接"
+                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C] resize-y break-all"
+                />
+                <p className="text-[11px] text-[#8C877D] mt-1 leading-relaxed">
+                  提示：可在此直接修改服务器地址、端口、密码/UUID 或参数，保存后将自动重新解析并更新节点配置。
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2 border-t border-[#E8E2D8]">
                 <button
                   type="button"
-                  onClick={() => setRenamingNode(null)}
-                  className="px-3.5 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl"
+                  onClick={() => setEditingNode(null)}
+                  className="px-3.5 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl cursor-pointer"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl disabled:opacity-50"
+                  className="px-4 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? '保存中...' : '保存'}
+                  {isSubmitting ? '保存中...' : '保存更改'}
                 </button>
               </div>
             </form>
