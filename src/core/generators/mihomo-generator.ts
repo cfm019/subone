@@ -255,7 +255,7 @@ export function generateMihomoConfig(
   }
 
   // 1. Inject Custom / Manual Proxies directly (if any)
-  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
 
   // If no network providers configured, fallback to writing all nodes

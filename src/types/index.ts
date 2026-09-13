@@ -102,6 +102,10 @@ export interface ProxyNode {
   congestionControl?: string;
   obfs?: string;
   obfsPassword?: string;
+  plugin?: string;
+  pluginOpts?: any;
+  h2Path?: string;
+  h2Host?: string;
 
   multiplex?: any;
 

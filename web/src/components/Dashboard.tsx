@@ -53,7 +53,7 @@ function generateRandomSubToken(): string {
 interface DashboardProps {
   config: AppConfig | null;
   nodes: ProxyNode[];
-  onNavigateTab: (tab: 'dashboard' | 'sources' | 'nodes' | 'groups' | 'rules' | 'templates') => void;
+  onNavigateTab: (tab: 'dashboard' | 'sources' | 'groups' | 'rules' | 'templates') => void;
   onRefreshConfig: () => Promise<void>;
   onUpdateProfiles: (updater: (prev: SubscriptionProfile[]) => SubscriptionProfile[]) => void;
 }
@@ -356,10 +356,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return list.length;
   };
 
-  const customNodesCount = config?.sources.find(s => s.type === 'custom')?.nodes?.length || 0;
-  const networkSources = config?.sources.filter(s => s.type !== 'custom') || [];
-  const proxyGroupsCount = config?.proxyGroups.length || 0;
-  const rulesCount = config?.rulesList.length || 0;
+  const sourcesCount = config?.sources?.length || 0;
+  const proxyGroupsCount = config?.proxyGroups?.length || 0;
+  const rulesCount = config?.rulesList?.length || 0;
+  const templatesCount = config?.templates?.length || 0;
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 pt-2 pb-16">
@@ -370,28 +370,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
           className="p-3.5 rounded-xl bg-white border border-[#E3DDD2] hover:border-[#CC785C]/50 transition-all cursor-pointer shadow-2xs group"
         >
           <div className="flex items-center justify-between">
-            <span className="text-xs text-[#8C877D] font-medium">订阅源</span>
+            <span className="text-xs text-[#8C877D] font-medium">订阅与节点</span>
             <Layers className="w-3.5 h-3.5 text-[#8C877D] group-hover:text-[#CC785C]" />
           </div>
           <div className="mt-1 flex items-baseline gap-1">
             <span className="text-lg font-bold font-mono text-[#1F1E1D]">
-              {networkSources.length + (customNodesCount > 0 ? 1 : 0)}
+              {sourcesCount}
             </span>
-            <span className="text-[11px] text-[#8C877D]">个源</span>
-          </div>
-        </div>
-
-        <div
-          onClick={() => onNavigateTab('nodes')}
-          className="p-3.5 rounded-xl bg-white border border-[#E3DDD2] hover:border-[#CC785C]/50 transition-all cursor-pointer shadow-2xs group"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-xs text-[#8C877D] font-medium">节点池</span>
-            <Server className="w-3.5 h-3.5 text-[#8C877D] group-hover:text-[#CC785C]" />
-          </div>
-          <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-lg font-bold font-mono text-[#1F1E1D]">{nodes.length}</span>
-            <span className="text-[11px] text-[#8C877D]">个节点</span>
+            <span className="text-[11px] text-[#8C877D]">个源 · {nodes.length} 节点</span>
           </div>
         </div>
 
@@ -420,6 +406,20 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="mt-1 flex items-baseline gap-1">
             <span className="text-lg font-bold font-mono text-[#1F1E1D]">{rulesCount}</span>
             <span className="text-[11px] text-[#8C877D]">条规则</span>
+          </div>
+        </div>
+
+        <div
+          onClick={() => onNavigateTab('templates')}
+          className="p-3.5 rounded-xl bg-white border border-[#E3DDD2] hover:border-[#CC785C]/50 transition-all cursor-pointer shadow-2xs group"
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-xs text-[#8C877D] font-medium">配置模版</span>
+            <FileCode className="w-3.5 h-3.5 text-[#8C877D] group-hover:text-[#CC785C]" />
+          </div>
+          <div className="mt-1 flex items-baseline gap-1">
+            <span className="text-lg font-bold font-mono text-[#1F1E1D]">{templatesCount}</span>
+            <span className="text-[11px] text-[#8C877D]">个模版</span>
           </div>
         </div>
       </div>

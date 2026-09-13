@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/Header';
 import { Dashboard } from './components/Dashboard';
 import { SourcesManager } from './components/SourcesManager';
-import { NodesViewer } from './components/NodesViewer';
 import { GroupsManager } from './components/GroupsManager';
 import { RulesManager } from './components/RulesManager';
 import { TemplateEditor } from './components/TemplateEditor';
@@ -23,7 +22,7 @@ import {
 const API_BASE = '/api';
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'sources' | 'nodes' | 'groups' | 'rules' | 'templates'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'sources' | 'groups' | 'rules' | 'templates'>('dashboard');
 
   const [config, setConfig] = useState<AppConfig | null>(null);
   const [nodes, setNodes] = useState<ProxyNode[]>([]);
@@ -166,12 +165,12 @@ export function App() {
   };
 
   // Custom Nodes handlers
-  const handleImportCustomNodes = async (text: string, replaceAll?: boolean) => {
+  const handleImportCustomNodes = async (text: string, replaceAll?: boolean, targetSourceId?: string) => {
     try {
       const res = await apiFetch(`${API_BASE}/custom-nodes/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text, replaceAll }),
+        body: JSON.stringify({ text, replaceAll, sourceId: targetSourceId }),
       });
       const json = await res.json().catch(() => null);
       if (!res.ok || (json && json.success === false)) {
@@ -181,13 +180,13 @@ export function App() {
       }
 
       if (json?.data) {
-        // Direct local state update from response (0 redundant network payload)
+        const targetId = json.sourceId || targetSourceId || 'custom';
         setConfig(prev => {
           if (!prev) return prev;
           return {
             ...prev,
             sources: (prev.sources || []).map(s => {
-              if (s.id === 'custom') {
+              if (s.id === targetId) {
                 return {
                   ...s,
                   nodes: json.data,
@@ -217,7 +216,7 @@ export function App() {
       return {
         ...prev,
         sources: (prev.sources || []).map(s => {
-          if (s.id === 'custom') {
+          if (s.nodes && s.nodes.some(n => n.id === id)) {
             const nextNodes = (s.nodes || []).filter(n => n.id !== id);
             return {
               ...s,
@@ -239,6 +238,42 @@ export function App() {
     } catch (err) {
       console.error('handleDeleteCustomNode error:', err);
       await fetchData();
+    }
+  };
+
+  const handleAddCustomGroup = async (name: string) => {
+    try {
+      setErrorMsg(null);
+      const res = await apiFetch(`${API_BASE}/sources`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, type: 'custom', url: '' }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok || (json && json.success === false)) {
+        const msg = json?.message || `创建节点组失败 (HTTP ${res.status})`;
+        setErrorMsg(msg);
+        alert(msg);
+        return;
+      }
+      await fetchData();
+    } catch (err: any) {
+      console.error('handleAddCustomGroup error:', err);
+      const msg = `创建节点组发生异常: ${err.message || err}`;
+      setErrorMsg(msg);
+      alert(msg);
+    }
+  };
+
+  const handleRefreshAllSources = async () => {
+    try {
+      setErrorMsg(null);
+      const res = await apiFetch(`${API_BASE}/sources/refresh-all`, { method: 'POST' });
+      if (res.ok) {
+        await fetchData();
+      }
+    } catch (err: any) {
+      console.error('handleRefreshAllSources error:', err);
     }
   };
 
@@ -675,18 +710,13 @@ export function App() {
           <SourcesManager
             sources={config?.sources || []}
             onAddSource={handleAddSource}
+            onAddCustomGroup={handleAddCustomGroup}
             onUpdateSource={handleUpdateSource}
             onDeleteSource={handleDeleteSource}
             onRefreshSource={handleRefreshSource}
+            onRefreshAllSources={handleRefreshAllSources}
             onImportCustomNodes={handleImportCustomNodes}
             onDeleteCustomNode={handleDeleteCustomNode}
-          />
-        )}
-
-        {activeTab === 'nodes' && (
-          <NodesViewer
-            nodes={nodes}
-            sources={config?.sources || []}
           />
         )}
 

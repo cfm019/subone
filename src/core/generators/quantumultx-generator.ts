@@ -154,7 +154,7 @@ export function generateQuantumultXConfig(
   const lines = templateConf.split('\n');
   const resultLines: string[] = [];
 
-  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const generatedProxyLines = nodesToWrite.map(nodeToQuantumultXProxy);
 
   let inServerLocal = false;

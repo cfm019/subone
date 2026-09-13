@@ -42,7 +42,7 @@ export function injectUnifiedToMihomo(
 
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
 
-  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const customNodeNames = customNodes.map(n => n.name);
   const allNodeNames = nodes.map(n => n.name);
 
@@ -217,7 +217,7 @@ export function injectUnifiedToMihomo(
   }
 
   // 3. Build Rules
-  const availableGroupNames = new Set((doc['proxy-groups'] || []).map((g: any) => g.name));
+  const availableGroupNames = new Set<string>((doc['proxy-groups'] || []).map((g: any) => String(g.name)));
   const fallbackGroup = (doc['proxy-groups'] || []).find((g: any) => g.name === '🚀 节点选择')?.name || doc['proxy-groups']?.[0]?.name || 'DIRECT';
 
   const generatedRules: string[] = [];
@@ -278,11 +278,11 @@ export function injectUnifiedToSingbox(
   proxyOutbounds.forEach(p => {
     const sName = (p._sourceName || '').trim();
     const sId = (p._sourceId || '').trim();
-    const isCustom = sId === 'custom';
-    const key = isCustom ? 'custom' : sName.toLowerCase();
+    const isCustom = sId === 'custom' || sId.startsWith('custom');
+    const key = isCustom ? (sId || 'custom') : sName.toLowerCase();
 
     if (!discoveredSources.has(key)) {
-      const sourceName = isCustom ? '独立节点组' : sName;
+      const sourceName = sName || (isCustom ? '独立节点组' : sName);
       const groupTag = sourceName.startsWith('⚡️') ? sourceName : `⚡️ ${sourceName}`;
       discoveredSources.set(key, {
         groupTag,
@@ -449,8 +449,8 @@ export function injectUnifiedToSingbox(
   });
 
   // Ensure 🎯 本地直连 always exists
-  const hasDirect = groupOutbounds.some(g => g.tag === '🎯 本地直连' || g.type === 'direct') ||
-                    customTemplateOutbounds.some(g => g.tag === '🎯 本地直连' || g.type === 'direct');
+  const hasDirect = groupOutbounds.some((g: any) => g.tag === '🎯 本地直连' || g.type === 'direct') ||
+                    customTemplateOutbounds.some((g: any) => g.tag === '🎯 本地直连' || g.type === 'direct');
   if (!hasDirect) {
     groupOutbounds.push({
       tag: '🎯 本地直连',
@@ -459,8 +459,8 @@ export function injectUnifiedToSingbox(
   }
 
   // Ensure REJECT always exists
-  const hasReject = groupOutbounds.some(g => g.tag === 'REJECT' || g.type === 'block') ||
-                    customTemplateOutbounds.some(g => g.tag === 'REJECT' || g.type === 'block');
+  const hasReject = groupOutbounds.some((g: any) => g.tag === 'REJECT' || g.type === 'block') ||
+                    customTemplateOutbounds.some((g: any) => g.tag === 'REJECT' || g.type === 'block');
   if (!hasReject) {
     groupOutbounds.push({
       tag: 'REJECT',
@@ -469,8 +469,8 @@ export function injectUnifiedToSingbox(
   }
 
   // Ensure GLOBAL selector exists for Clash API Global mode
-  const hasGlobal = groupOutbounds.some(g => g.tag === 'GLOBAL') ||
-                    customTemplateOutbounds.some(g => g.tag === 'GLOBAL');
+  const hasGlobal = groupOutbounds.some((g: any) => g.tag === 'GLOBAL') ||
+                    customTemplateOutbounds.some((g: any) => g.tag === 'GLOBAL');
   if (!hasGlobal) {
     const mainSelectorTag = effectiveGroups.find(g => g.name === '🚀 节点选择')?.name ||
                             effectiveGroups[0]?.name ||
@@ -711,7 +711,7 @@ export function injectUnifiedToLoon(
   }));
 
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
-  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const customNodeNames = customNodes.map(n => n.name.replace(/[=,]/g, '_'));
   const allNodeNames = nodes.map(n => n.name.replace(/[=,]/g, '_'));
 
@@ -1074,7 +1074,7 @@ export function injectUnifiedToQuantumultX(
   }));
 
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
-  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const qxSupportedNodes = nodes.filter(isSupportedByQuantumultX);
   const qxSupportedCustomNodes = customNodes.filter(isSupportedByQuantumultX);
   const customNodeNames = qxSupportedCustomNodes.map(n => n.name.replace(/[=,]/g, '_'));
@@ -1445,7 +1445,7 @@ export function injectUnifiedToShadowrocket(
   }));
 
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
-  const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const customNodeNames = customNodes.map(n => n.name.replace(/[=,]/g, '_'));
   const allNodeNames = nodes.map(n => n.name.replace(/[=,]/g, '_'));
 
@@ -1459,7 +1459,13 @@ export function injectUnifiedToShadowrocket(
 
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
-        if (u === '独立节点组' || u === 'custom') {
+        const customSrc = sources.find(s => s.type === 'custom' && (s.name === u || s.id === u));
+        if (customSrc) {
+          const groupNodes = nodes
+            .filter(n => n.sourceId === customSrc.id || n.sourceName === customSrc.name)
+            .map(n => n.name.replace(/[=,]/g, '_'));
+          members.push(...groupNodes);
+        } else if (u === '独立节点组' || u === 'custom') {
           members.push(...customNodeNames);
         } else {
           const matchedSrc = networkSources.find(s => s.name === u || s.id === u);

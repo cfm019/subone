@@ -2,8 +2,8 @@ import React from 'react';
 import { Layers, RefreshCw, Settings, LogOut } from 'lucide-react';
 
 interface HeaderProps {
-  activeTab: 'dashboard' | 'sources' | 'nodes' | 'groups' | 'rules' | 'templates';
-  setActiveTab: (tab: 'dashboard' | 'sources' | 'nodes' | 'groups' | 'rules' | 'templates') => void;
+  activeTab: 'dashboard' | 'sources' | 'groups' | 'rules' | 'templates';
+  setActiveTab: (tab: 'dashboard' | 'sources' | 'groups' | 'rules' | 'templates') => void;
   onOpenSettings: () => void;
   nodeCount: number;
   hasAuth?: boolean;
@@ -20,8 +20,7 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const tabs = [
     { id: 'dashboard', label: '首页' },
-    { id: 'sources', label: '订阅源' },
-    { id: 'nodes', label: `节点池 (${nodeCount})` },
+    { id: 'sources', label: '订阅与节点' },
     { id: 'groups', label: '策略组' },
     { id: 'rules', label: '分流规则' },
     { id: 'templates', label: '配置模版' },

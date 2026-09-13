@@ -176,7 +176,7 @@ export function generateLoonConfig(
   const resultLines: string[] = [];
 
   // In expandNodes mode, write all nodes into [Proxy]; otherwise only custom/manual nodes
-  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const generatedProxyLines = nodesToWrite.map(nodeToLoonProxy);
 
   let inProxySection = false;

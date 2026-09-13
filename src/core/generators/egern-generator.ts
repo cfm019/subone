@@ -28,7 +28,7 @@ export function generateEgernConfig(
   }
 
   const expandNodes = Boolean(options?.expandNodes);
-  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const egernProxies = nodesToWrite.map(nodeToEgernProxy);
 
   doc = injectUnifiedToEgern(doc, egernProxies, nodes, proxyGroups, rulesList, sources, options);

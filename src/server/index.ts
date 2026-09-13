@@ -153,7 +153,7 @@ function ensureCustomSource(config: AppConfig): SubscriptionSource {
   // Remove demo sources if any
   config.sources = (config.sources || []).filter(s => s.id !== 'src-demo-1' && !s.name.includes('示例订阅源'));
 
-  let customSrc = config.sources.find(s => s.id === 'custom');
+  let customSrc = config.sources.find(s => s.id === 'custom' || s.type === 'custom');
   if (!customSrc) {
     customSrc = {
       id: 'custom',
@@ -166,7 +166,7 @@ function ensureCustomSource(config: AppConfig): SubscriptionSource {
     };
     config.sources.unshift(customSrc);
   } else {
-    customSrc.name = '独立节点组';
+    if (!customSrc.name) customSrc.name = '独立节点组';
     customSrc.type = 'custom';
     if (!customSrc.nodes) customSrc.nodes = [];
     customSrc.nodeCount = customSrc.nodes.length;
@@ -387,52 +387,71 @@ app.post('/api/config/settings', (req, res) => {
 
 // 2. Custom Nodes Management (独立节点组专区)
 app.get('/api/custom-nodes', (req, res) => {
+  const sourceId = req.query.sourceId as string | undefined;
+  if (sourceId) {
+    const target = appConfig.sources.find(s => s.id === sourceId && (s.type === 'custom' || s.id === 'custom'));
+    return res.json({ success: true, count: target?.nodes?.length || 0, data: target?.nodes || [] });
+  }
   const customSrc = ensureCustomSource(appConfig);
   res.json({ success: true, count: customSrc.nodes?.length || 0, data: customSrc.nodes || [] });
 });
 
 app.post('/api/custom-nodes/import', (req, res) => {
-  const { text, replaceAll } = req.body;
+  const { text, replaceAll, sourceId } = req.body;
   if (!text || typeof text !== 'string') {
     return res.status(400).json({ success: false, message: 'Text content required' });
   }
 
-  const parsedNodes: ProxyNode[] = parseRawContent(text, 'custom', '独立节点组', undefined, appConfig.countryRules);
+  // Find target custom source
+  let targetSrc = sourceId
+    ? appConfig.sources.find(s => s.id === sourceId && (s.type === 'custom' || s.id === 'custom'))
+    : null;
+  if (!targetSrc) {
+    targetSrc = ensureCustomSource(appConfig);
+  }
+
+  const parsedNodes: ProxyNode[] = parseRawContent(text, targetSrc.id, targetSrc.name, undefined, appConfig.countryRules);
 
   if (parsedNodes.length === 0) {
     return res.status(400).json({ success: false, message: '未能从粘贴文本中识别到有效节点 (支持 URI 链接, Clash YAML, Singbox JSON, Base64)' });
   }
 
-  const customSrc = ensureCustomSource(appConfig);
   if (replaceAll) {
-    customSrc.nodes = parsedNodes;
+    targetSrc.nodes = parsedNodes;
   } else {
-    const existingIds = new Set((customSrc.nodes || []).map(n => `${n.server}:${n.port}:${n.name}`));
+    const existingIds = new Set((targetSrc.nodes || []).map(n => `${n.server}:${n.port}:${n.name}`));
     const newOnes = parsedNodes.filter(n => !existingIds.has(`${n.server}:${n.port}:${n.name}`));
-    customSrc.nodes = [...(customSrc.nodes || []), ...newOnes];
+    targetSrc.nodes = [...(targetSrc.nodes || []), ...newOnes];
   }
 
-  customSrc.nodeCount = customSrc.nodes.length;
-  customSrc.lastUpdated = new Date().toISOString();
+  targetSrc.nodeCount = targetSrc.nodes.length;
+  targetSrc.lastUpdated = new Date().toISOString();
   ensureCustomProxyGroup(appConfig);
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
 
   res.json({
     success: true,
-    count: customSrc.nodes.length,
+    count: targetSrc.nodes.length,
     added: parsedNodes.length,
-    data: customSrc.nodes,
+    data: targetSrc.nodes,
+    sourceId: targetSrc.id,
     proxyGroups: appConfig.proxyGroups,
   });
 });
 
 app.post('/api/custom-nodes', (req, res) => {
-  const customSrc = ensureCustomSource(appConfig);
+  let targetSrc = req.body.sourceId
+    ? appConfig.sources.find(s => s.id === req.body.sourceId && (s.type === 'custom' || s.id === 'custom'))
+    : null;
+  if (!targetSrc) {
+    targetSrc = ensureCustomSource(appConfig);
+  }
+
   const newNode: ProxyNode = {
     id: `custom-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    sourceId: 'custom',
-    sourceName: '独立节点组',
+    sourceId: targetSrc.id,
+    sourceName: targetSrc.name,
     name: req.body.name || '独立节点',
     type: req.body.type || 'vless',
     server: req.body.server || '',
@@ -442,8 +461,8 @@ app.post('/api/custom-nodes', (req, res) => {
     ...req.body,
   };
 
-  customSrc.nodes = [...(customSrc.nodes || []), newNode];
-  customSrc.nodeCount = customSrc.nodes.length;
+  targetSrc.nodes = [...(targetSrc.nodes || []), newNode];
+  targetSrc.nodeCount = targetSrc.nodes.length;
   ensureCustomProxyGroup(appConfig);
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
@@ -451,45 +470,86 @@ app.post('/api/custom-nodes', (req, res) => {
   res.json({
     success: true,
     data: newNode,
-    count: customSrc.nodes.length,
+    count: targetSrc.nodes.length,
+    sourceId: targetSrc.id,
     proxyGroups: appConfig.proxyGroups,
   });
 });
 
 app.put('/api/custom-nodes/:id', (req, res) => {
-  const customSrc = ensureCustomSource(appConfig);
-  const idx = (customSrc.nodes || []).findIndex(n => n.id === req.params.id);
-  if (idx === -1) return res.status(404).json({ success: false, message: 'Node not found' });
-
-  customSrc.nodes![idx] = { ...customSrc.nodes![idx], ...req.body };
-  saveConfig(appConfig);
-  globalNodesCache = collectNodesFromSources(appConfig);
-
-  res.json({ success: true, data: customSrc.nodes![idx] });
+  for (const s of appConfig.sources) {
+    if ((s.type === 'custom' || s.id === 'custom') && s.nodes) {
+      const idx = s.nodes.findIndex(n => n.id === req.params.id);
+      if (idx !== -1) {
+        s.nodes[idx] = { ...s.nodes[idx], ...req.body };
+        saveConfig(appConfig);
+        globalNodesCache = collectNodesFromSources(appConfig);
+        return res.json({ success: true, data: s.nodes[idx] });
+      }
+    }
+  }
+  return res.status(404).json({ success: false, message: 'Node not found' });
 });
 
 app.delete('/api/custom-nodes/:id', (req, res) => {
-  const customSrc = ensureCustomSource(appConfig);
-  customSrc.nodes = (customSrc.nodes || []).filter(n => n.id !== req.params.id);
-  customSrc.nodeCount = customSrc.nodes.length;
-  saveConfig(appConfig);
-  globalNodesCache = collectNodesFromSources(appConfig);
+  let deleted = false;
+  let remainingCount = 0;
+  let affectedNodes: ProxyNode[] = [];
 
-  res.json({ success: true, count: customSrc.nodes.length, data: customSrc.nodes, message: 'Node deleted' });
+  for (const s of appConfig.sources) {
+    if ((s.type === 'custom' || s.id === 'custom') && s.nodes) {
+      const prevLen = s.nodes.length;
+      s.nodes = s.nodes.filter(n => n.id !== req.params.id);
+      if (s.nodes.length !== prevLen) {
+        s.nodeCount = s.nodes.length;
+        deleted = true;
+        remainingCount = s.nodeCount;
+        affectedNodes = s.nodes;
+        break;
+      }
+    }
+  }
+
+  if (deleted) {
+    saveConfig(appConfig);
+    globalNodesCache = collectNodesFromSources(appConfig);
+    return res.json({ success: true, count: remainingCount, data: affectedNodes, message: 'Node deleted' });
+  }
+
+  return res.status(404).json({ success: false, message: 'Node not found' });
 });
 
-// 3. Network Sources Management (网络订阅源)
+// 3. Network Sources Management (网络订阅源与自建节点组)
 app.get('/api/sources', (req, res) => {
   ensureCustomSource(appConfig);
   res.json({ success: true, data: appConfig.sources });
 });
 
-// Add source: automatically fetch nodes if valid URL, create dedicated proxy group, and persist
+// Add source: support both network subscription (url) and new custom node group (type: 'custom')
 app.post('/api/sources', async (req, res) => {
   try {
-    const sourceName = (req.body.name || '新订阅源').trim();
-    const sourceUrl = (req.body.url || '').trim();
+    const sourceName = (req.body.name || '新节点组').trim();
 
+    // 1. Create custom group if type is 'custom'
+    if (req.body.type === 'custom') {
+      const newCustomSource: SubscriptionSource = {
+        id: `custom-${Date.now()}`,
+        name: sourceName,
+        url: '',
+        enabled: req.body.enabled !== false,
+        type: 'custom',
+        nodeCount: 0,
+        nodes: [],
+        lastUpdated: new Date().toISOString(),
+      };
+      appConfig.sources.push(newCustomSource);
+      saveConfig(appConfig);
+      globalNodesCache = collectNodesFromSources(appConfig);
+      return res.json({ success: true, count: 0, data: newCustomSource });
+    }
+
+    // 2. Create network subscription
+    const sourceUrl = (req.body.url || '').trim();
     if (!sourceUrl) {
       return res.status(400).json({ success: false, message: '订阅链接不能为空' });
     }
@@ -561,10 +621,14 @@ app.put('/api/sources/:id', (req, res) => {
   }
   appConfig.sources[index] = { ...appConfig.sources[index], ...req.body };
   saveConfig(appConfig);
+  globalNodesCache = collectNodesFromSources(appConfig);
   res.json({ success: true, data: appConfig.sources[index] });
 });
 
 app.delete('/api/sources/:id', (req, res) => {
+  if (req.params.id === 'custom') {
+    return res.status(400).json({ success: false, message: '默认独立节点组不能删除，可清空组内节点' });
+  }
   appConfig.sources = appConfig.sources.filter(s => s.id !== req.params.id);
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
