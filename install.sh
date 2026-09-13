@@ -207,15 +207,7 @@ setup_codebase() {
         echo -e "${GREEN}✓ 检测到脚本所在目录为 SubOne 项目目录: ${INSTALL_DIR}${RESET}"
     else
         INSTALL_DIR="${DEFAULT_INSTALL_DIR}"
-        if [ -d "${INSTALL_DIR}/.git" ]; then
-            echo -e "${CYAN}检测到已存在安装目录 ${INSTALL_DIR}，正在拉取最新代码...${RESET}"
-            cd "${INSTALL_DIR}"
-            git fetch --all >/dev/null 2>&1 || true
-            git reset --hard origin/main >/dev/null 2>&1 || true
-        elif [ -d "${INSTALL_DIR}" ]; then
-            echo -e "${CYAN}目录 ${INSTALL_DIR} 已存在，使用现有目录...${RESET}"
-            cd "${INSTALL_DIR}"
-        else
+        if [ ! -d "${INSTALL_DIR}" ]; then
             echo -e "${CYAN}克隆 SubOne 仓库至 ${INSTALL_DIR}...${RESET}"
             mkdir -p "${INSTALL_DIR}"
             if ! git clone -b main "${REPO_URL}" "${INSTALL_DIR}" 2>/dev/null; then
@@ -223,6 +215,15 @@ setup_codebase() {
                 git clone -b main "${REPO_PROXY_URL}" "${INSTALL_DIR}"
             fi
         fi
+    fi
+
+    # 无论通过何种路径定位项目，只要存在 .git 仓库，均同步拉取最新代码
+    if [ -d "${INSTALL_DIR}/.git" ]; then
+        echo -e "${CYAN}正在同步拉取 SubOne 最新代码 (git fetch & reset)...${RESET}"
+        cd "${INSTALL_DIR}"
+        git fetch --all >/dev/null 2>&1 || git fetch origin main >/dev/null 2>&1 || true
+        git reset --hard origin/main >/dev/null 2>&1 || git reset --hard origin/HEAD >/dev/null 2>&1 || true
+        echo -e "${GREEN}✓ 当前代码版本: $(git log -1 --format='%h - %s (%cd)' --date=relative)${RESET}"
     fi
 }
 
