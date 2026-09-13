@@ -196,7 +196,7 @@ Subone 支持为各个客户端自定义基础模版。所有模版文件统一�
 #### 1. 下载脚本到路由器
 ```bash
 # 下载到管理目录（如 /root）并赋予执行权限
-curl -sSL -o /root/update-singbox.sh https://raw.githubusercontent.com/cfm019/subone/main/tools/update-singbox.sh
+curl -4 -sSL -o /root/update-singbox.sh https://raw.githubusercontent.com/cfm019/subone/main/tools/update-singbox.sh
 chmod +x /root/update-singbox.sh
 ```
 
