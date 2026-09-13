@@ -29,9 +29,10 @@ ENV PORT=3000
 COPY package*.json ./
 RUN npm install --omit=dev
 
-# Copy build artifacts
+# Copy build artifacts and templates
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/web/dist ./web/dist
+COPY templates/ ./templates/
 
 
 EXPOSE 3000

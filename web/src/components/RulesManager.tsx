@@ -7,6 +7,7 @@ import {
   FileText,
   Filter,
   Plus,
+  RotateCcw,
   Search,
   Trash2,
   Upload,
@@ -25,6 +26,7 @@ interface RulesManagerProps {
   onUpdateRule: (id: string, updates: Partial<UnifiedRuleItem>) => Promise<void>;
   onDeleteRule: (id: string) => Promise<void>;
   onClearAllRules: () => Promise<void>;
+  onResetDefaultRules?: () => Promise<void>;
 }
 
 export const RulesManager: React.FC<RulesManagerProps> = ({
@@ -37,6 +39,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
   onUpdateRule,
   onDeleteRule,
   onClearAllRules,
+  onResetDefaultRules,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [kindFilter, setKindFilter] = useState<'all' | 'local' | 'remote'>('all');
@@ -216,6 +219,21 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
         </div>
 
         <div className="flex items-center gap-2 flex-wrap">
+          {onResetDefaultRules && (
+            <button
+              onClick={async () => {
+                if (window.confirm('确定要恢复为模版默认分流规则吗？\n系统将重新从 templates 模版目录载入预设的分流规则。')) {
+                  await onResetDefaultRules();
+                }
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl text-[#78746D] hover:text-[#B85D3F]"
+              title="从 templates 模版目录重新载入默认分流规则"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>恢复默认</span>
+            </button>
+          )}
+
           <button
             onClick={openFullTextEditor}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl"

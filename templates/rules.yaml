@@ -1,0 +1,32 @@
+# Subone 默认分流规则模版 (YAML 格式)
+# 语法支持：
+# - 本地规则: - TYPE,payload,OUTBOUND,no-resolve  # 备注说明
+# - 远程规则集: - RULE-SET,url,OUTBOUND  # 备注说明
+
+# ================= 本地分流规则 (Local Rules) =================
+- IP-CIDR,10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8,🎯 本地直连,no-resolve  # 局域网与内网 IP
+- DOMAIN-KEYWORD,torrent, bittorrent, tracker, announce,🎯 本地直连,no-resolve  # PT / BT 流量直连
+
+# --- AI 服务本地分流规则 (OpenAI / Claude / Gemini / Grok / Cursor 等) ---
+- DOMAIN-SUFFIX,chatgpt.com, openai.com, oaistatic.com, oaiusercontent.com, ai.com, sora.com, claude.ai, claude.com, anthropic.com, claudeusercontent.com, clau.de, gemini.google.com, generativelanguage.googleapis.com, aistudio.google.com, ai.google.dev, notebooklm.google.com, notebooklm.google, labs.google, deepmind.google, deepmind.com, grok.com, x.ai, cursor.sh, cursor.com, cursorvm.com, perplexity.ai, poe.com, mistral.ai, cohere.com, copilot.microsoft.com, sydney.bing.com, bard.google.com, makersuite.google.com,🤖 AI 服务,no-resolve  # AI 域名后缀
+- DOMAIN,alkalimakersuite-pa.clients6.google.com, jules.google.com,🤖 AI 服务,no-resolve  # AI 完整域名
+- DOMAIN-KEYWORD,openai, chatgpt, claude, anthropic, cursor, perplexity,🤖 AI 服务,no-resolve  # AI 域名关键字
+
+- DOMAIN-SUFFIX,apple.com, icloud.com, mzstatic.com,🎯 本地直连,no-resolve  # Apple 常见服务直连
+
+# ================= 远程规则集 (Remote Rule-Sets) =================
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ads-all.srs,REJECT  # 广告拦截 (Category-Ads-All)
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/category-ai-!cn.srs,🤖 AI 服务  # AI 规则集 (Category-AI-!CN)
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/youtube.srs,📹 YouTube  # YouTube 规则集
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/google.srs,🌐 Google  # Google 规则集
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geoip/google.srs,🌐 Google  # Google IP 规则集
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/telegram.srs,📲 电报消息  # Telegram 域名规则集
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geoip/telegram.srs,📲 电报消息  # Telegram IP 规则集
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/github.srs,🌎 国外域名  # GitHub 规则集
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/steam@cn.srs,🎯 本地直连  # Steam 国区下载 CDN
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/steam.srs,🌎 国外域名  # Steam 商店与社区
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/apple.srs,🎯 本地直连  # Apple 服务
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/geolocation-!cn.srs,🌎 国外域名  # 国外常见域名代理 (Geolocation-!CN)
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/sing/geo/geosite/geolocation-cn.srs,🇨🇳 国内服务  # 国内直连扩展 (Geolocation-CN)
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-cn.srs,🇨🇳 国内服务  # 国内直连域名 (GeoSite CN)
+- RULE-SET,https://gh-proxy.com/https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs,🇨🇳 国内服务  # 国内直连 IP (GeoIP CN)

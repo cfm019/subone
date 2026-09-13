@@ -171,7 +171,7 @@ caddy reload
 
 Subone 支持为各个客户端自定义基础模版。所有模版文件统一维护在根目录 `templates/` 下，系统启动与新建模版时直接从该目录读取对应文件，支持开箱即用与热修改：
 
-| 模版文件 | 目标客户端 | 适用场景与特征 |
+| 模版文件 | 目标客户端 / 模块 | 适用场景与特征 |
 | :--- | :--- | :--- |
 | [templates/singbox-client.json](templates/singbox-client.json) | Sing-box | macOS/iOS 终端设备，配置 Tun 排除私网/Tailscale防回环、防IPv6泄漏 |
 | [templates/singbox-gateway.json](templates/singbox-gateway.json) | Sing-box | 软路由/Linux 旁路由透明网关，`auto_redirect` 自动流量与 DNS 接管 |
@@ -180,6 +180,10 @@ Subone 支持为各个客户端自定义基础模版。所有模版文件统一�
 | [templates/quantumultx.conf](templates/quantumultx.conf) | Quantumult X | 标准 CONF 基础模版，包含 [server_local]、[policy]、[filter_local] 占位 |
 | [templates/egern.yaml](templates/egern.yaml) | Egern | 标准 YAML 基础模版，支持 Hysteria 2、VLESS Reality 等协议 |
 | [templates/shadowrocket.conf](templates/shadowrocket.conf) | Shadowrocket | 标准 CONF 基础模版，支持全协议单行定义与规则集注入 |
+| [templates/rules.json](templates/rules.json) | 分流规则 (JSON) | 默认统一分流规则定义（结构化字段，包含广告拦截、AI、YouTube、Telegram 等本地/远程规则） |
+| [templates/rules.yaml](templates/rules.yaml) | 分流规则 (YAML) | 默认统一分流规则定义（YAML 列表文本格式，带清晰注释分类，方便文本直接修改） |
+| [templates/proxy-groups.json](templates/proxy-groups.json) | 策略组模版 | 默认内置策略组（节点选择、AI 服务、国外域名、国内服务、自动测速等） |
+| [templates/country-rules.json](templates/country-rules.json) | 地区识别规则 | 默认国家/地区正则匹配与策略组映射规则（香港、台湾、日本、美国等） |
 
 ---
 

@@ -1,0 +1,93 @@
+[
+  {
+    "id": "grp-select",
+    "name": "🚀 节点选择",
+    "type": "select",
+    "proxies": ["♻️ 自动选择", "👉 手动选择", "🇭🇰 香港节点", "🇯🇵 日本节点", "🇺🇸 美国节点", "🎯 本地直连"]
+  },
+  {
+    "id": "grp-ai",
+    "name": "🤖 AI 服务",
+    "type": "select",
+    "proxies": ["🚀 节点选择", "🇺🇸 美国节点", "🇯🇵 日本节点", "🎯 本地直连"]
+  },
+  {
+    "id": "grp-youtube",
+    "name": "📹 YouTube",
+    "type": "select",
+    "proxies": ["🚀 节点选择", "♻️ 自动选择", "🇭🇰 香港节点", "🇯🇵 日本节点", "🇺🇸 美国节点"]
+  },
+  {
+    "id": "grp-google",
+    "name": "🌐 Google",
+    "type": "select",
+    "proxies": ["🚀 节点选择", "♻️ 自动选择", "🇭🇰 香港节点", "🇯🇵 日本节点", "🇺🇸 美国节点"]
+  },
+  {
+    "id": "grp-telegram",
+    "name": "📲 电报消息",
+    "type": "select",
+    "proxies": ["🚀 节点选择", "♻️ 自动选择", "🇭🇰 香港节点", "🇯🇵 日本节点", "🇺🇸 美国节点"]
+  },
+  {
+    "id": "grp-devops",
+    "name": "💻 远程运维",
+    "type": "select",
+    "proxies": ["🎯 本地直连", "🚀 节点选择", "♻️ 自动选择"]
+  },
+  {
+    "id": "grp-cn",
+    "name": "🇨🇳 国内服务",
+    "type": "select",
+    "proxies": ["🎯 本地直连", "🚀 节点选择"]
+  },
+  {
+    "id": "grp-global",
+    "name": "🌎 国外域名",
+    "type": "select",
+    "proxies": ["🚀 节点选择", "🎯 本地直连"]
+  },
+  {
+    "id": "grp-fallback",
+    "name": "🐟 漏网之鱼",
+    "type": "select",
+    "proxies": ["🚀 节点选择", "🎯 本地直连"]
+  },
+  {
+    "id": "grp-direct",
+    "name": "🎯 本地直连",
+    "type": "direct"
+  },
+  {
+    "id": "grp-auto",
+    "name": "♻️ 自动选择",
+    "type": "urltest",
+    "tolerance": 50
+  },
+  {
+    "id": "grp-manual",
+    "name": "👉 手动选择",
+    "type": "select"
+  },
+  {
+    "id": "grp-hk",
+    "name": "🇭🇰 香港节点",
+    "type": "urltest",
+    "filter": "(?i)(🇭🇰|港|hk|hongkong)",
+    "tolerance": 50
+  },
+  {
+    "id": "grp-jp",
+    "name": "🇯🇵 日本节点",
+    "type": "urltest",
+    "filter": "(?i)(🇯🇵|日|jp|japan)",
+    "tolerance": 50
+  },
+  {
+    "id": "grp-us",
+    "name": "🇺🇸 美国节点",
+    "type": "urltest",
+    "filter": "(?i)(🇺🇸|美|us|unitedstates)",
+    "tolerance": 50
+  }
+]

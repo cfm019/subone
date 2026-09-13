@@ -31,7 +31,7 @@ import {
   SubscriptionProfile,
 } from '../types/index.js';
 
-import { INITIAL_COUNTRY_RULES, INITIAL_TEMPLATES, loadDefaultTemplate } from '../storage/default-templates.js';
+import { INITIAL_COUNTRY_RULES, INITIAL_TEMPLATES, loadDefaultTemplate, loadDefaultRules } from '../storage/default-templates.js';
 
 
 const app = express();
@@ -935,6 +935,18 @@ app.post('/api/rules/unified/clear-all', (req, res) => {
   appConfig.rulesList = [];
   saveConfig(appConfig);
   res.json({ success: true, message: 'All rules cleared' });
+});
+
+app.post('/api/rules/unified/reset', (req, res) => {
+  const defaultRules = loadDefaultRules();
+  appConfig.rulesList = defaultRules;
+  saveConfig(appConfig);
+  res.json({ success: true, count: defaultRules.length, data: appConfig.rulesList });
+});
+
+app.get('/api/rules/unified/defaults', (req, res) => {
+  const defaultRules = loadDefaultRules();
+  res.json({ success: true, count: defaultRules.length, data: defaultRules });
 });
 
 app.get('/api/rules/unified/export-text', (req, res) => {

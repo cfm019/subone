@@ -599,6 +599,18 @@ export function App() {
     }
   };
 
+  const handleResetDefaultRules = async () => {
+    const res = await apiFetch(`${API_BASE}/rules/unified/reset`, { method: 'POST' });
+    if (res.ok) {
+      const json = await res.json();
+      if (json.data) {
+        setConfig(prev => prev ? { ...prev, rulesList: json.data } : prev);
+      }
+    } else {
+      await fetchConfigOnly();
+    }
+  };
+
   // Templates handlers
 
   const handleAddTemplate = async (template: Partial<ConfigTemplate>): Promise<ConfigTemplate | undefined> => {
@@ -779,6 +791,7 @@ export function App() {
             onUpdateRule={handleUpdateRule}
             onDeleteRule={handleDeleteRule}
             onClearAllRules={handleClearAllRules}
+            onResetDefaultRules={handleResetDefaultRules}
           />
         )}
 

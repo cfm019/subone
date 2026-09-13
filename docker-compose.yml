@@ -11,3 +11,4 @@ services:
       # - ADMIN_PASSWORD=your_password_here
     volumes:
       - ./data:/app/data
+      - ./templates:/app/templates

@@ -2,65 +2,40 @@ import fs from 'fs';
 import path from 'path';
 import { ConfigTemplate, CountryPatternRule, ProxyGroupItem, UnifiedRuleItem, ClientType } from '../types/index.js';
 import { DEFAULT_COUNTRY_PATTERNS } from '../core/parser/country.js';
+import { parseUnifiedRulesText } from '../core/parser/rules-parser.js';
 
-export const INITIAL_COUNTRY_RULES: CountryPatternRule[] = DEFAULT_COUNTRY_PATTERNS;
+export const TEMPLATE_SEARCH_DIRS = [
+  path.resolve(process.cwd(), 'templates'),
+  path.resolve(process.cwd(), 'docs'),
+  path.resolve(__dirname, '../../templates'),
+  path.resolve(__dirname, '../../docs'),
+  path.resolve(__dirname, '../templates'),
+  path.resolve(__dirname, '../docs'),
+];
 
-const TEMPLATE_FILE_MAP: Record<ClientType, string[]> = {
-  singbox: [
-    'singbox-client-template.json',
-    'singbox-client.json',
-    'singbox.json',
-    'singbox-template.json',
-  ],
-  mihomo: [
-    'mihomo-template.yaml',
-    'mihomo.yaml',
-    'clash-template.yaml',
-    'clash.yaml',
-  ],
-  loon: [
-    'loon-template.conf',
-    'loon.conf',
-  ],
-  quantumultx: [
-    'quantumultx-template.conf',
-    'quantumultx.conf',
-    'qx-template.conf',
-    'qx.conf',
-  ],
-  egern: [
-    'egern-template.yaml',
-    'egern.yaml',
-  ],
-  shadowrocket: [
-    'shadowrocket-template.conf',
-    'shadowrocket.conf',
-    'rocket-template.conf',
-    'rocket.conf',
-  ],
-};
+interface FoundFile {
+  path: string;
+  mtime: number;
+  content: string;
+}
 
-function readTemplateFile(type: ClientType): string | null {
-  const searchDirs = [
-    path.resolve(process.cwd(), 'templates'),
-    path.resolve(process.cwd(), 'docs'),
-    path.resolve(__dirname, '../../templates'),
-    path.resolve(__dirname, '../../docs'),
-    path.resolve(__dirname, '../templates'),
-    path.resolve(__dirname, '../docs'),
-  ];
+export function findLatestTemplateFile(candidateNames: string[]): FoundFile | null {
+  const foundFiles: FoundFile[] = [];
 
-  const candidateNames = TEMPLATE_FILE_MAP[type] || [];
-
-  for (const dir of searchDirs) {
+  for (const dir of TEMPLATE_SEARCH_DIRS) {
     if (!fs.existsSync(dir)) continue;
     for (const name of candidateNames) {
       const filePath = path.join(dir, name);
       if (fs.existsSync(filePath)) {
         try {
+          const stat = fs.statSync(filePath);
           const content = fs.readFileSync(filePath, 'utf-8');
           if (content && content.trim().length > 0) {
-            return content;
+            foundFiles.push({
+              path: filePath,
+              mtime: stat.mtimeMs,
+              content: content.trim(),
+            });
           }
         } catch {
           // ignore error and continue search
@@ -69,7 +44,51 @@ function readTemplateFile(type: ClientType): string | null {
     }
   }
 
-  return null;
+  if (foundFiles.length === 0) return null;
+  // Sort by mtime descending (most recently modified file first)
+  foundFiles.sort((a, b) => b.mtime - a.mtime);
+  return foundFiles[0];
+}
+
+const TEMPLATE_FILE_MAP: Record<ClientType, string[]> = {
+  singbox: [
+    'singbox-client.json',
+    'singbox-client-template.json',
+    'singbox.json',
+    'singbox-template.json',
+  ],
+  mihomo: [
+    'mihomo.yaml',
+    'mihomo-template.yaml',
+    'clash.yaml',
+    'clash-template.yaml',
+  ],
+  loon: [
+    'loon.conf',
+    'loon-template.conf',
+  ],
+  quantumultx: [
+    'quantumultx.conf',
+    'quantumultx-template.conf',
+    'qx.conf',
+    'qx-template.conf',
+  ],
+  egern: [
+    'egern.yaml',
+    'egern-template.yaml',
+  ],
+  shadowrocket: [
+    'shadowrocket.conf',
+    'shadowrocket-template.conf',
+    'rocket.conf',
+    'rocket-template.conf',
+  ],
+};
+
+function readTemplateFile(type: ClientType): string | null {
+  const candidateNames = TEMPLATE_FILE_MAP[type] || [];
+  const found = findLatestTemplateFile(candidateNames);
+  return found ? found.content : null;
 }
 
 function getFallbackTemplate(type: ClientType): string {
@@ -178,7 +197,7 @@ export const INITIAL_PROFILES: import('../types/index.js').SubscriptionProfile[]
 ];
 
 
-export const INITIAL_PROXY_GROUPS: ProxyGroupItem[] = [
+export const FALLBACK_PROXY_GROUPS: ProxyGroupItem[] = [
   {
     id: 'grp-select',
     name: '🚀 节点选择',
@@ -272,7 +291,7 @@ export const INITIAL_PROXY_GROUPS: ProxyGroupItem[] = [
   },
 ];
 
-export const INITIAL_RULES_LIST: UnifiedRuleItem[] = [
+export const FALLBACK_RULES_LIST: UnifiedRuleItem[] = [
   {
     id: 'r-ads-all-remote',
     name: '广告拦截 (Category-Ads-All)',
@@ -306,7 +325,16 @@ export const INITIAL_RULES_LIST: UnifiedRuleItem[] = [
     name: 'AI 域名后缀',
     kind: 'local',
     type: 'DOMAIN-SUFFIX',
-    payload: 'chatgpt.com, openai.com, oaistatic.com, oaiusercontent.com, claude.ai, anthropic.com, claudeusercontent.com, perplexity.ai, grok.com, x.ai, cursor.sh, cursor.com, poe.com, mistral.ai, cohere.com, copilot.microsoft.com, sydney.bing.com, generativelanguage.googleapis.com, aistudio.google.com, bard.google.com, makersuite.google.com',
+    payload: 'chatgpt.com, openai.com, oaistatic.com, oaiusercontent.com, ai.com, sora.com, claude.ai, claude.com, anthropic.com, claudeusercontent.com, clau.de, gemini.google.com, generativelanguage.googleapis.com, aistudio.google.com, ai.google.dev, notebooklm.google.com, notebooklm.google, labs.google, deepmind.google, deepmind.com, grok.com, x.ai, cursor.sh, cursor.com, cursorvm.com, perplexity.ai, poe.com, mistral.ai, cohere.com, copilot.microsoft.com, sydney.bing.com, bard.google.com, makersuite.google.com',
+    outbound: '🤖 AI 服务',
+    enabled: true,
+  },
+  {
+    id: 'r-ai-domain',
+    name: 'AI 完整域名',
+    kind: 'local',
+    type: 'DOMAIN',
+    payload: 'alkalimakersuite-pa.clients6.google.com, jules.google.com',
     outbound: '🤖 AI 服务',
     enabled: true,
   },
@@ -315,7 +343,7 @@ export const INITIAL_RULES_LIST: UnifiedRuleItem[] = [
     name: 'AI 域名关键字',
     kind: 'local',
     type: 'DOMAIN-KEYWORD',
-    payload: 'openai, chatgpt, claude, anthropic, perplexity',
+    payload: 'openai, chatgpt, claude, anthropic, cursor, perplexity',
     outbound: '🤖 AI 服务',
     enabled: true,
   },
@@ -469,3 +497,91 @@ export const INITIAL_RULES_LIST: UnifiedRuleItem[] = [
     enabled: true,
   },
 ];
+
+export function loadDefaultRules(): UnifiedRuleItem[] {
+  const candidateNames = [
+    'rules.json',
+    'rules.yaml',
+    'rules.txt',
+    'rules-template.json',
+    'rules-template.yaml',
+    'rules-template.txt',
+  ];
+  const found = findLatestTemplateFile(candidateNames);
+  if (found) {
+    const { path: filePath, content } = found;
+    if (filePath.endsWith('.json')) {
+      try {
+        const parsed = JSON.parse(content);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((item, idx) => ({
+            id: item.id || `r-tpl-${idx}`,
+            name: item.name || `规则 ${idx + 1}`,
+            kind: item.kind || (item.type === 'RULE-SET' || item.payload?.startsWith('http') ? 'remote' : 'local'),
+            type: item.type || (item.kind === 'remote' ? 'RULE-SET' : 'DOMAIN-SUFFIX'),
+            payload: item.payload || '',
+            format: item.format,
+            outbound: item.outbound || '🎯 本地直连',
+            enabled: item.enabled !== false,
+          }));
+        } else if (parsed && typeof parsed === 'object') {
+          const list = parsed.rules || parsed.rulesList || parsed.route?.rules;
+          if (Array.isArray(list) && list.length > 0) {
+            return parseUnifiedRulesText(JSON.stringify(list));
+          }
+        }
+      } catch (err) {
+        console.error(`[loadDefaultRules] Failed to parse JSON from ${filePath}:`, err);
+      }
+    } else {
+      // YAML or text
+      try {
+        const parsed = parseUnifiedRulesText(content);
+        if (parsed.length > 0) {
+          return parsed;
+        }
+      } catch (err) {
+        console.error(`[loadDefaultRules] Failed to parse text rules from ${filePath}:`, err);
+      }
+    }
+  }
+
+  return FALLBACK_RULES_LIST;
+}
+
+export function loadDefaultCountryRules(): CountryPatternRule[] {
+  const candidateNames = ['country-rules.json', 'country-rules-template.json'];
+  const found = findLatestTemplateFile(candidateNames);
+  if (found) {
+    try {
+      const parsed = JSON.parse(found.content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (err) {
+      console.error(`[loadDefaultCountryRules] Failed to parse country rules from ${found.path}:`, err);
+    }
+  }
+  return DEFAULT_COUNTRY_PATTERNS;
+}
+
+export function loadDefaultProxyGroups(): ProxyGroupItem[] {
+  const candidateNames = ['proxy-groups.json', 'proxy-groups-template.json'];
+  const found = findLatestTemplateFile(candidateNames);
+  if (found) {
+    try {
+      const parsed = JSON.parse(found.content);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        return parsed;
+      }
+    } catch (err) {
+      console.error(`[loadDefaultProxyGroups] Failed to parse proxy groups from ${found.path}:`, err);
+    }
+  }
+  return FALLBACK_PROXY_GROUPS;
+}
+
+export const INITIAL_PROXY_GROUPS: ProxyGroupItem[] = loadDefaultProxyGroups();
+export const INITIAL_RULES_LIST: UnifiedRuleItem[] = loadDefaultRules();
+export const INITIAL_COUNTRY_RULES: CountryPatternRule[] = loadDefaultCountryRules();
+
