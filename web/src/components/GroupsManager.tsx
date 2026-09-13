@@ -287,7 +287,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
             </span>
           </div>
           <p className="text-xs text-[#78746D] mt-0.5">
-            可视化配置出站代理分组、子策略引用、订阅源与实时节点展开预览
+            可视化配置出站代理分组、子策略引用、订阅源
           </p>
         </div>
 

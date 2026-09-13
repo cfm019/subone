@@ -211,7 +211,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
             </span>
           </div>
           <p className="text-xs text-[#78746D] mt-0.5">
-            配置本地域名/IP 规则与远程规则集，指定流量去往目标策略组
+            配置本地域名/IP 规则与远程规则集，指定去向
           </p>
         </div>
 

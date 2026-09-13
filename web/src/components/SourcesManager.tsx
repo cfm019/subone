@@ -253,7 +253,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
             </div>
           </div>
           <p className="text-xs text-[#8C877D] mt-1">
-            统一管理网络订阅与自建散装节点，点击卡片就地展开查看、复制与管理节点
+            管理网络订阅与自建散装节点
           </p>
         </div>
 
@@ -363,7 +363,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     {/* 卡片副信息 */}
                     <div className="text-[11px] text-[#78746D] truncate">
                       {isCustom ? (
-                        <span>包含 {nodesList.length} 个自建节点 · 支持 VLESS, Hysteria2, SS, WireGuard 等</span>
+                        <span></span>
                       ) : (
                         <span className="font-mono select-all text-[#8C877D]">{source.url}</span>
                       )}

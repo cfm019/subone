@@ -729,7 +729,7 @@ export function App() {
         </div>
       )}
 
-      <main className="flex-1 p-6">
+      <main className="flex-1 p-4 pb-24 sm:p-6 md:pb-6">
         {activeTab === 'dashboard' && (
           <Dashboard
             config={config}
