@@ -7,7 +7,7 @@ mixed-port: 7890
 allow-lan: false
 mode: rule
 log-level: info
-ipv6: false
+ipv6: true
 
 dns:
   enable: true
@@ -24,6 +24,12 @@ dns:
     - '*.lan'
     - '*.local'
     - localhost.ptlogin2.qq.com
+    - '+.i234.me'
+    - '+.dscloud.me'
+    - '+.synology.me'
+    - '+.synology.com'
+    - '+.quickconnect.to'
+    - '+.mycloudnas.com'
 
 tun:
   enable: false

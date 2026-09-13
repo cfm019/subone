@@ -28,6 +28,15 @@
     "enabled": true
   },
   {
+    "id": "r-direct-nas",
+    "name": "NAS 域名直连 (IPv6 DDNS)",
+    "kind": "local",
+    "type": "DOMAIN-SUFFIX",
+    "payload": "i234.me, dscloud.me, synology.me, synology.com, quickconnect.to, mycloudnas.com",
+    "outbound": "🎯 本地直连",
+    "enabled": true
+  },
+  {
     "id": "r-ai-local",
     "name": "AI 域名后缀",
     "kind": "local",

@@ -35,10 +35,6 @@
       },
       {
         "domain_suffix": [
-          "local",
-          "arpa",
-          "in-addr.arpa",
-          "ip6.arpa",
           "i234.me",
           "dscloud.me",
           "synology.me",
@@ -49,16 +45,28 @@
         "server": "alidns"
       },
       {
-        "rule_set": [
-          "geosite-geolocation-cn",
-          "geosite-cn",
-          "geosite-apple",
-          "geosite-steam@cn"
+        "domain_suffix": [
+          "local",
+          "arpa",
+          "in-addr.arpa",
+          "ip6.arpa",
+          "ipw.cn"
         ],
         "server": "alidns"
       },
       {
-        "query_type": "AAAA",
+        "rule_set": [
+          "geosite-google",
+          "geosite-youtube",
+          "geosite-category-ai-!cn",
+          "geosite-github",
+          "geosite-telegram",
+          "geosite-geolocation-!cn"
+        ],
+        "query_type": [
+          "AAAA",
+          "HTTPS"
+        ],
         "action": "reject"
       },
       {
@@ -72,6 +80,22 @@
           "geosite-steam"
         ],
         "server": "fakeip"
+      },
+      {
+        "rule_set": [
+          "geosite-geolocation-cn",
+          "geosite-cn",
+          "geosite-apple",
+          "geosite-steam@cn"
+        ],
+        "server": "alidns"
+      },
+      {
+        "query_type": [
+          "AAAA",
+          "HTTPS"
+        ],
+        "action": "reject"
       },
       {
         "clash_mode": "Direct",
@@ -148,6 +172,8 @@
           "in-addr.arpa",
           "ip6.arpa",
           "ipw.cn",
+          "i234.me",
+          "dscloud.me",
           "synology.me",
           "synology.com",
           "quickconnect.to",
