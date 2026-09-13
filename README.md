@@ -5,6 +5,29 @@
 目标格式支持 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
 
 
+## 快速开始
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/cfm019/subone/main/install.sh)
+```
+
+- **控制台访问**：`http://<你的VPS_IP>:3456`
+- **安装目录**：`/opt/subone`
+- **配置文件**：`/opt/subone/config.json`（默认免密直接登录，修改 `adminPassword` 后重启可启用密码）
+- **常用命令**：
+  ```bash
+  # 一键更新到最新版本并重新编译重启
+  bash /opt/subone/install.sh update
+
+  # 服务管理
+  systemctl status subone     # 查看状态
+  journalctl -u subone -f     # 查看实时日志
+  systemctl restart subone    # 重启服务
+  systemctl stop subone       # 停止服务
+  ```
+
+---
+
 ## 主要特性
 
 - **多 Profile**：
@@ -26,12 +49,15 @@
   - 根据客户端 User-Agent 智能识别分发，亦可通过路径或参数显式获取对应格式或 Base64 纯节点列表。
 
 
-## 环境要求
+
+
+## 源码编译部署
+## 1. 环境要求
 
 - **Node.js**: `>= 20.0.0` (可通过 `node -v` 查看)
 - **npm**: `>= 9.0.0`
 
-## 配置
+## 2. 配置与编译
 
 服务启动依赖根目录 `config.json` 或环境变量，示例文件见 [config.example.json](config.example.json)。
 
@@ -54,22 +80,19 @@
 - `PORT`
 - `ADMIN_PASSWORD`
 
-## 部署
-
-### 1. 源码编译
 
 ```bash
 # 确认 Node 版本 >= 20
 node -v
 
-# 安装后端依赖
+# 安装依赖
 npm install
 
 # 编译后端与前端
 npm run build
 ```
 
-### 2. 后台常驻运行 (Systemd 服务)
+### 3. 后台常驻运行 (Systemd 服务)
 
 创建服务文件 `/etc/systemd/system/subone.service`：
 
@@ -111,7 +134,7 @@ systemctl restart subone
 systemctl stop subone
 ```
 
-### 3. 反向代理 (Caddy)
+### 4. 反向代理 (Caddy)
 
 公网部署建议使用 Caddy 反向代理并自动申请 HTTPS 证书：
 
