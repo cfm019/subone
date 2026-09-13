@@ -132,6 +132,22 @@ export function loadConfig(): AppConfig {
         templates = INITIAL_TEMPLATES;
       }
 
+      // Ensure standard INITIAL_TEMPLATES exist
+      for (const initTpl of INITIAL_TEMPLATES) {
+        if (!templates.some(t => t.id === initTpl.id)) {
+          if (initTpl.id === 'tpl-singbox-gateway') {
+            const singboxIdx = templates.findIndex(t => t.id === 'tpl-singbox-default');
+            if (singboxIdx >= 0) {
+              templates.splice(singboxIdx + 1, 0, initTpl);
+            } else {
+              templates.push(initTpl);
+            }
+          } else {
+            templates.push(initTpl);
+          }
+        }
+      }
+
       const proxyGroups: ProxyGroupItem[] = Array.isArray(parsed.proxyGroups) && parsed.proxyGroups.length > 0
         ? parsed.proxyGroups
         : INITIAL_PROXY_GROUPS;

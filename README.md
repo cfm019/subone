@@ -185,26 +185,5 @@ Subone 支持为各个客户端自定义基础模版。所有模版文件统一�
 | [templates/proxy-groups.json](templates/proxy-groups.json) | 策略组模版 | 默认内置策略组（节点选择、AI 服务、国外域名、国内服务、自动测速等） |
 | [templates/country-rules.json](templates/country-rules.json) | 地区识别规则 | 默认国家/地区正则匹配与策略组映射规则（香港、台湾、日本、美国等） |
 
----
-
-### Sing-box 场景调优要点
-
-#### 1. 终端客户端（macOS / iOS 等）
-- **排除局域网与虚拟内网 (`route_exclude_address`)**：
-  - 显式排除 RFC 1918 私网网段（`192.168.0.0/16`, `10.0.0.0/8`, `172.16.0.0/12`）以及运营商 CGNAT / Tailscale 网段（`100.64.0.0/10`, `100.100.100.100/32`, `fd7a:115c:a1e0::/48`）。
-  - 确保 AirDrop、随航（Sidecar）、群晖 NAS 以及 Tailscale 内网穿透流量不会误入 TUN，避免客户端路由回环与连接挂死。
-
-#### 2. 旁路由（透明网关）
-- **启用 `auto_redirect: true`**：
-  - Sing-box TUN 模式旁路由转发的核心参数。开启后，Sing-box 会自动在底层（iptables/nftables PREROUTING 链）注入规则，接管局域网其他设备转发过来的流量进入 TUN。
-- **DNS 劫持与接入 (`dns-in: 1053` + `hijack-dns`)**：
-  - 配置 `dns-in` 直连入站（监听在 `127.0.0.1:1053`），并在路由规则中通过 `action: "hijack-dns"` 劫持 53 与 1053 端口。
-  - 若系统搭配使用 AdGuard Home、MosDNS 或 dnsmasq，可将它们的上游 DNS 指向 `127.0.0.1:1053`，以使用 Sing-box 的 FakeIP 与分流能力。
-- **阻断 QUIC、IPv6 (AAAA) 与 STUN**：
-  - **QUIC / HTTP3 拦截**：由于 UDP 443 协议常导致节点限速或连接不稳定，模版中配置 Reject QUIC，强制降级至 TCP/TLS。
-  - **AAAA 拦截 (`query_type: AAAA -> reject`)**：防止双栈环境下客户端通过未受控的 IPv6 出口直连导致分流失效。
-  - **STUN 拦截 (853/STUN -> reject)**：防止部分 WebRTC / 穿透协议探测导致真实公网 IP 泄漏。
-- **局域网私网段与 NAS 直连**：
-  - 明确将私网网段（`10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`, `fd00::/8` 等）以及局域网常用域名（如 Synology、QNAP 等私有 NAS DDNS 域名）匹配至直连策略，保障内网设备互访不受代理干扰。
 
 

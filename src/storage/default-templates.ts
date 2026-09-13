@@ -122,7 +122,18 @@ export function loadDefaultTemplate(type: ClientType): string {
   return getFallbackTemplate(type);
 }
 
+export function loadSingboxGatewayTemplate(): string {
+  const found = findLatestTemplateFile([
+    'singbox-gateway.json',
+    'singbox-gateway-template.json',
+    'gateway.json',
+  ]);
+  if (found) return found.content;
+  return getFallbackTemplate('singbox');
+}
+
 export const DEFAULT_SINGBOX_TEMPLATE = loadDefaultTemplate('singbox');
+export const DEFAULT_SINGBOX_GATEWAY_TEMPLATE = loadSingboxGatewayTemplate();
 export const DEFAULT_MIHOMO_TEMPLATE = loadDefaultTemplate('mihomo');
 export const DEFAULT_LOON_TEMPLATE = loadDefaultTemplate('loon');
 export const DEFAULT_QUANTUMULTX_TEMPLATE = loadDefaultTemplate('quantumultx');
@@ -137,6 +148,14 @@ export const INITIAL_TEMPLATES: ConfigTemplate[] = [
     content: loadDefaultTemplate('singbox'),
     isDefault: true,
     description: '适用于 Singbox 客户端 Tun 模式配置',
+  },
+  {
+    id: 'tpl-singbox-gateway',
+    name: 'Sing-box 旁路由模版',
+    type: 'singbox',
+    content: loadSingboxGatewayTemplate(),
+    isDefault: false,
+    description: '适用于软路由/Linux 旁路由透明网关，支持 auto_redirect 流量接管与 DNS 劫持',
   },
   {
     id: 'tpl-mihomo-default',

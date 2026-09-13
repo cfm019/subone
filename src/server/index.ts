@@ -31,7 +31,7 @@ import {
   SubscriptionProfile,
 } from '../types/index.js';
 
-import { INITIAL_COUNTRY_RULES, INITIAL_TEMPLATES, loadDefaultTemplate, loadDefaultRules } from '../storage/default-templates.js';
+import { INITIAL_COUNTRY_RULES, INITIAL_TEMPLATES, loadDefaultTemplate, loadSingboxGatewayTemplate, loadDefaultRules } from '../storage/default-templates.js';
 
 
 const app = express();
@@ -996,6 +996,7 @@ app.get('/api/templates', (req, res) => {
 app.get('/api/templates/defaults', (req, res) => {
   const defaults: Record<string, string> = {
     singbox: loadDefaultTemplate('singbox'),
+    'singbox-gateway': loadSingboxGatewayTemplate(),
     mihomo: loadDefaultTemplate('mihomo'),
     loon: loadDefaultTemplate('loon'),
     quantumultx: loadDefaultTemplate('quantumultx'),
@@ -1006,8 +1007,12 @@ app.get('/api/templates/defaults', (req, res) => {
 });
 
 app.get('/api/templates/default/:type', (req, res) => {
-  const type = req.params.type as ClientType;
-  const content = loadDefaultTemplate(type);
+  const type = req.params.type;
+  if (type === 'singbox-gateway') {
+    const content = loadSingboxGatewayTemplate();
+    return res.json({ success: true, type, content });
+  }
+  const content = loadDefaultTemplate(type as ClientType);
   res.json({ success: true, type, content });
 });
 
@@ -1057,7 +1062,11 @@ app.post('/api/templates/:id/reset', (req, res) => {
     return res.status(404).json({ success: false, message: '模版未找到' });
   }
   const tpl = appConfig.templates[index];
-  tpl.content = loadDefaultTemplate(tpl.type);
+  if (tpl.id === 'tpl-singbox-gateway' || tpl.name.includes('旁路由') || tpl.name.includes('网关')) {
+    tpl.content = loadSingboxGatewayTemplate();
+  } else {
+    tpl.content = loadDefaultTemplate(tpl.type);
+  }
   appConfig.templates[index] = tpl;
   saveConfig(appConfig);
   return res.json({ success: true, data: tpl });
