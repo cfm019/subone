@@ -70,8 +70,8 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedNodeId, setCopiedNodeId] = useState<string | null>(null);
 
-  // Accordion expanded source IDs
-  const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set(['custom']));
+  // Accordion expanded source IDs (默认全部收起)
+  const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set());
 
   // Internal search term for each source accordion: sourceId -> searchTerm
   const [sourceSearchTerms, setSourceSearchTerms] = useState<Record<string, string>>({});
