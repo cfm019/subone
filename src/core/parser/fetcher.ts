@@ -94,6 +94,7 @@ export function parseRawContent(
       if (node) {
         node.sourceId = sourceId;
         node.sourceName = sourceName;
+        node.raw = line;
         uriNodes.push(node);
       }
     }

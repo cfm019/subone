@@ -17,6 +17,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { SubscriptionSource, ProxyNode } from '../types';
+import { nodeToUri } from '../utils/nodeUri';
 
 interface SourcesManagerProps {
   sources: SubscriptionSource[];
@@ -27,6 +28,7 @@ interface SourcesManagerProps {
   onRefreshSource: (id: string) => Promise<void>;
   onRefreshAllSources?: () => Promise<void>;
   onImportCustomNodes: (text: string, replaceAll?: boolean, targetSourceId?: string) => Promise<void>;
+  onUpdateCustomNode?: (id: string, updates: Partial<ProxyNode>) => Promise<void>;
   onDeleteCustomNode: (id: string) => Promise<void>;
 }
 
@@ -39,6 +41,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   onRefreshSource,
   onRefreshAllSources,
   onImportCustomNodes,
+  onUpdateCustomNode,
   onDeleteCustomNode,
 }) => {
   // Modal states
@@ -47,6 +50,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [renamingSource, setRenamingSource] = useState<SubscriptionSource | null>(null);
   const [newGroupNameInput, setNewGroupNameInput] = useState('');
+
+  // Node rename state
+  const [renamingNode, setRenamingNode] = useState<{ id: string; name: string } | null>(null);
+  const [newNodeNameInput, setNewNodeNameInput] = useState('');
 
   // Target group for importing nodes
   const [targetGroupId, setTargetGroupId] = useState<string>('custom');
@@ -60,7 +67,6 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
   // Loading & Action states
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
-  const [isRefreshingAll, setIsRefreshingAll] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [copiedNodeId, setCopiedNodeId] = useState<string | null>(null);
 
@@ -173,6 +179,24 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
     }
   };
 
+  // Submit rename node
+  const handleRenameNodeSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!renamingNode || !newNodeNameInput.trim() || isSubmitting) return;
+    setIsSubmitting(true);
+    try {
+      if (onUpdateCustomNode) {
+        await onUpdateCustomNode(renamingNode.id, { name: newNodeNameInput.trim() });
+      }
+      setRenamingNode(null);
+      setNewNodeNameInput('');
+    } catch (err: any) {
+      alert(err.message || '重命名节点失败');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   // Submit import nodes
   const handleImportSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,26 +225,9 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
     }
   };
 
-  // Refresh all
-  const handleRefreshAll = async () => {
-    if (isRefreshingAll) return;
-    setIsRefreshingAll(true);
-    try {
-      if (onRefreshAllSources) {
-        await onRefreshAllSources();
-      } else {
-        for (const s of networkSources) {
-          await onRefreshSource(s.id);
-        }
-      }
-    } finally {
-      setIsRefreshingAll(false);
-    }
-  };
-
   // Copy node URI or info
   const handleCopyNode = (node: ProxyNode) => {
-    const textToCopy = `${node.name} (${node.type}) ${node.server}:${node.port}`;
+    const textToCopy = nodeToUri(node);
     navigator.clipboard.writeText(textToCopy);
     setCopiedNodeId(node.id);
     setTimeout(() => setCopiedNodeId(null), 1500);
@@ -273,24 +280,12 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
               setNewGroupNameInput('');
               setShowCreateGroupModal(true);
             }}
-            className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#EFEAE2]/60 rounded-xl transition-colors cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
             title="新建独立的自建节点分组"
           >
-            <Layers className="w-3.5 h-3.5" />
+            <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>新建组</span>
           </button>
-
-          {networkSources.length > 0 && (
-            <button
-              onClick={handleRefreshAll}
-              disabled={isRefreshingAll}
-              className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#EFEAE2]/60 rounded-xl transition-colors cursor-pointer disabled:opacity-50"
-              title="全部刷新网络订阅"
-            >
-              <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingAll ? 'animate-spin text-[#CC785C]' : ''}`} />
-              <span>{isRefreshingAll ? '同步中' : '全部刷新'}</span>
-            </button>
-          )}
         </div>
       </div>
 
@@ -388,24 +383,16 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   className="flex items-center gap-1.5 self-end sm:self-center shrink-0"
                   onClick={e => e.stopPropagation()}
                 >
-                  {/* 查看 / 展开切换按钮 */}
-                  <button
-                    onClick={() => toggleExpand(source.id)}
-                    className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#EFEAE2]/60 rounded-lg transition-colors cursor-pointer"
-                  >
-                    <span>{isExpanded ? '收起' : `查看 (${nodesList.length})`}</span>
-                  </button>
-
                   {/* 自建组专属操作 */}
                   {isCustom && (
                     <>
                       <button
                         onClick={() => handleOpenImportModal(source.id)}
                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#CC785C] bg-[#CC785C]/10 hover:bg-[#CC785C]/20 rounded-lg transition-colors cursor-pointer"
-                        title="批量贴入节点到此组"
+                        title="添加节点到此组"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>贴入</span>
+                        <span>添加节点</span>
                       </button>
 
                       <button
@@ -535,18 +522,29 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                             </div>
                           </div>
 
-                          {/* 右侧微操作：复制链接、删除自建节点 */}
+                          {/* 右侧微操作：复制链接、改名、删除自建节点 */}
                           <div className="flex items-center gap-1.5 shrink-0">
                             <button
                               onClick={() => handleCopyNode(node)}
                               className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
-                              title="复制节点信息"
+                              title="复制节点链接"
                             >
                               {copiedNodeId === node.id ? (
                                 <Check className="w-3.5 h-3.5 text-[#367A68]" />
                               ) : (
                                 <Copy className="w-3.5 h-3.5" />
                               )}
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                setRenamingNode({ id: node.id, name: node.name });
+                                setNewNodeNameInput(node.name);
+                              }}
+                              className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
+                              title="重命名此节点"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
                             </button>
 
                             {isCustom && (
@@ -860,6 +858,53 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 <button
                   type="button"
                   onClick={() => setRenamingSource(null)}
+                  className="px-3.5 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl"
+                >
+                  取消
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="px-4 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl disabled:opacity-50"
+                >
+                  {isSubmitting ? '保存中...' : '保存'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+      {/* 重命名节点弹窗 */}
+      {renamingNode && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#FAF8F5] border border-[#E3DDD2] rounded-2xl p-5 max-w-sm w-full shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-[#E8E2D8]">
+              <h3 className="text-sm font-bold text-[#1F1E1D]">修改节点名称</h3>
+              <button
+                onClick={() => setRenamingNode(null)}
+                className="text-xs text-[#9E9A91] hover:text-[#1F1E1D]"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleRenameNodeSubmit} className="space-y-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-[#1F1E1D] mb-1">节点名称</label>
+                <input
+                  type="text"
+                  required
+                  autoFocus
+                  value={newNodeNameInput}
+                  onChange={e => setNewNodeNameInput(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setRenamingNode(null)}
                   className="px-3.5 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl"
                 >
                   取消

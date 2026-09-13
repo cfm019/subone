@@ -476,9 +476,9 @@ app.post('/api/custom-nodes', (req, res) => {
   });
 });
 
-app.put('/api/custom-nodes/:id', (req, res) => {
+const updateNodeHandler = (req: any, res: any) => {
   for (const s of appConfig.sources) {
-    if ((s.type === 'custom' || s.id === 'custom') && s.nodes) {
+    if (s.nodes) {
       const idx = s.nodes.findIndex(n => n.id === req.params.id);
       if (idx !== -1) {
         s.nodes[idx] = { ...s.nodes[idx], ...req.body };
@@ -489,7 +489,10 @@ app.put('/api/custom-nodes/:id', (req, res) => {
     }
   }
   return res.status(404).json({ success: false, message: 'Node not found' });
-});
+};
+
+app.put('/api/custom-nodes/:id', updateNodeHandler);
+app.put('/api/nodes/:id', updateNodeHandler);
 
 app.delete('/api/custom-nodes/:id', (req, res) => {
   let deleted = false;

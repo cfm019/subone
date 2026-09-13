@@ -241,6 +241,40 @@ export function App() {
     }
   };
 
+  const handleUpdateCustomNode = async (id: string, updates: Partial<ProxyNode>) => {
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        sources: (prev.sources || []).map(s => {
+          if (s.nodes && s.nodes.some(n => n.id === id)) {
+            const nextNodes = s.nodes.map(n => (n.id === id ? { ...n, ...updates } : n));
+            return {
+              ...s,
+              nodes: nextNodes,
+            };
+          }
+          return s;
+        }),
+      };
+    });
+    setNodes(prev => (prev || []).map(n => (n.id === id ? { ...n, ...updates } : n)));
+
+    try {
+      const res = await apiFetch(`${API_BASE}/custom-nodes/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      if (!res.ok) {
+        await fetchData();
+      }
+    } catch (err) {
+      console.error('handleUpdateCustomNode error:', err);
+      await fetchData();
+    }
+  };
+
   const handleAddCustomGroup = async (name: string) => {
     try {
       setErrorMsg(null);
@@ -716,6 +750,7 @@ export function App() {
             onRefreshSource={handleRefreshSource}
             onRefreshAllSources={handleRefreshAllSources}
             onImportCustomNodes={handleImportCustomNodes}
+            onUpdateCustomNode={handleUpdateCustomNode}
             onDeleteCustomNode={handleDeleteCustomNode}
           />
         )}
