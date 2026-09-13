@@ -189,8 +189,8 @@ export function loadConfig(): AppConfig {
 
       const sources: SubscriptionSource[] = Array.isArray(parsed.sources) ? parsed.sources : [];
       sources.forEach(s => {
-        if (s.id === 'custom' && (s.name === '手工自建' || s.name === '自建' || s.name === '零散节点')) {
-          s.name = '独立节点组';
+        if (s.id === 'custom' && !s.name) {
+          s.name = '自建节点';
         }
       });
 

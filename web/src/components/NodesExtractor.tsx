@@ -226,7 +226,7 @@ export const NodesExtractor: React.FC<NodesExtractorProps> = ({
             </span>
           </div>
           <p className="text-xs text-[#78746D]">
-            统一管理地区识别规则、关键字/正则过滤与重命名，一键拉取各订阅源并完成智能抽取与分组
+            管理地区识别规则、关键字/正则过滤与重命名
           </p>
 
           {/* Country Quick Stat Badges */}
@@ -235,11 +235,10 @@ export const NodesExtractor: React.FC<NodesExtractorProps> = ({
               <button
                 key={code}
                 onClick={() => setSelectedCountry(selectedCountry === code ? 'ALL' : code)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${
-                  selectedCountry === code
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-lg text-[11px] font-mono transition-all ${selectedCountry === code
                     ? 'bg-[#CC785C] text-white font-bold shadow-xs'
                     : 'bg-[#F5F2EC] text-[#59554E] hover:bg-[#EDE8DE] border border-[#E3DDD2]'
-                }`}
+                  }`}
               >
                 <span>{data.emoji}</span>
                 <span>{data.name}</span>
@@ -398,9 +397,8 @@ export const NodesExtractor: React.FC<NodesExtractorProps> = ({
                 {rules.map(rule => (
                   <div
                     key={rule.id}
-                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 text-xs transition-all ${
-                      rule.enabled ? 'bg-[#FAF8F5] border-[#EFECE6]' : 'bg-[#F7F5F2] border-[#E5DFD5] opacity-60'
-                    }`}
+                    className={`p-2.5 rounded-xl border flex items-center justify-between gap-3 text-xs transition-all ${rule.enabled ? 'bg-[#FAF8F5] border-[#EFECE6]' : 'bg-[#F7F5F2] border-[#E5DFD5] opacity-60'
+                      }`}
                   >
                     <div className="flex items-center gap-2.5 min-w-0 flex-1">
                       <button

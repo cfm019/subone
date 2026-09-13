@@ -49,7 +49,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             sub<span className="text-[#CC785C] font-normal">one</span>
           </h1>
           <p className="text-xs text-[#8C877D]">
-            智能订阅合并与规则路由中心 · 管理控制台
+            订阅合并与规则路由中心 · 管理控制台
           </p>
         </div>
 
@@ -60,7 +60,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <Lock className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="text-sm font-bold text-[#1F1E1D]">全站安全验证</h2>
+              <h2 className="text-sm font-bold text-[#1F1E1D]">安全验证</h2>
               <p className="text-[11px] text-[#8C877D]">请输入管理访问密码以继续</p>
             </div>
           </div>
@@ -98,18 +98,8 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
             </button>
           </form>
 
-          <div className="pt-2 text-center">
-            <span className="inline-flex items-center gap-1 text-[11px] text-[#9E9A91]">
-              <ShieldCheck className="w-3.5 h-3.5 text-[#367A68]" />
-              端到端高强度密钥加密与会话保护
-            </span>
-          </div>
         </div>
 
-        {/* Footer info */}
-        <div className="text-center mt-6 text-[11px] text-[#9E9A91]">
-          <span>如需重置密码，请编辑服务器根目录 <code>config.json</code> 中的 <code>adminPassword</code></span>
-        </div>
       </div>
     </div>
   );

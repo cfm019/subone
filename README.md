@@ -35,7 +35,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cfm019/subone/main/install.s
   - 每个 Profile 可按需勾选不同源节点、自选策略组、分流规则及各自的模版；
 - **独立节点与上游机场订阅源聚合**：
   - 支持导入各类上游机场订阅，提取节点并按地区或关键字筛选分组；
-  - 支持添加自建独立节点，支持单条/批量 URI、Clash YAML、Sing-box JSON 格式录入与智能解析；
+  - 支持添加自建独立节点，支持单条/批量 URI、Clash YAML、Sing-box JSON 格式录入与解析；
 - **协议与传输支持**：
   - **支持导入解析**：VLESS (Reality/Vision/gRPC/WS)、VMess、Shadowsocks (SS 2022/AEAD)、Trojan、Hysteria 2、TUIC v5、AnyTLS、WireGuard、Snell (v1~v4)、SOCKS5、HTTP、v2rayn 等协议；
   - **支持输入格式**：URI 链接列表、Base64 订阅、Clash/Mihomo YAML、Sing-box JSON；
@@ -46,7 +46,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cfm019/subone/main/install.s
 - **模版与客户端分发**：
   - 支持 **Sing-box**、**Mihomo (Clash)**、**Loon**、**Quantumult X**、**Egern**、**Shadowrocket** 等客户端；
   - 默认提供各客户端规范模版，支持自定义模版扩展；
-  - 根据客户端 User-Agent 智能识别分发，亦可通过路径或参数显式获取对应格式或 Base64 纯节点列表。
+  - 根据客户端 User-Agent 自识别分发，亦可通过路径或参数显式获取对应格式或 Base64 纯节点列表。
 
 
 
@@ -155,7 +155,7 @@ caddy reload
 
 | 客户端 / 场景 | 专用订阅路径 | 输出格式与说明 |
 | :--- | :--- | :--- |
-| **智能分发** | `/s/:token` | 根据请求头 `User-Agent` 自动识别客户端并分发匹配格式 |
+| **自识别分发** | `/s/:token` | 根据请求头 `User-Agent` 自动识别客户端并分发匹配格式 |
 | **Sing-box** | `/s/:token/singbox` | JSON 配置 (包含 DNS、Tun、入站、出站及路由分流) |
 | **Mihomo (Clash)** | `/s/:token/mihomo` | YAML 配置 (包含 proxies、proxy-groups、rules) |
 | **Loon** | `/s/:token/loon` | CONF 配置 (包含 [Proxy]、[Proxy Group]、[Rule]) |

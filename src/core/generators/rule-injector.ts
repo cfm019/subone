@@ -78,11 +78,47 @@ export function injectUnifiedToMihomo(
   const allProviderNames = networkSources.map(s => s.name.trim());
 
   // 2. Build Proxy Groups
+  const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
+  const customTagName = customSources[0]?.name 
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+    : '⚡️ 自建节点';
+
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
     ...g,
     proxies: g.proxies ? [...g.proxies] : undefined,
     use: g.use ? [...g.use] : undefined,
   }));
+
+  // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
+  const customGrp = effectiveGroups.find(g => 
+    g.id === 'grp-src-custom' || 
+    g.name === customTagName || 
+    g.name === '⚡️ 独立节点组' || 
+    g.name === '独立节点组'
+  );
+  if (customGrp) {
+    customGrp.name = customTagName;
+    customGrp.use = [customSources[0]?.name || '自建节点'];
+    const idx = effectiveGroups.indexOf(customGrp);
+    for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+      if (i !== idx) {
+        const g = effectiveGroups[i];
+        if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+    effectiveGroups.forEach(grp => {
+      if (grp !== customGrp) {
+        if (grp.use) {
+          grp.use = grp.use.map(u => (u === '独立节点组' || u === '⚡️ 独立节点组' ? (customSources[0]?.name || '自建节点') : u));
+        }
+        if (grp.proxies) {
+          grp.proxies = grp.proxies.map(p => (p === '⚡️ 独立节点组' || p === '独立节点组' ? customTagName : p));
+        }
+      }
+    });
+  }
 
   const validGroupNames = new Set(effectiveGroups.map(g => g.name));
   const validNodeNames = new Set(allNodeNames);
@@ -145,12 +181,40 @@ export function injectUnifiedToMihomo(
       return;
     }
 
+    // Custom dedicated node group
+    const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+    const isCustomGrp = grp.id === 'grp-src-custom' || 
+      cleanName === '自建节点' || 
+      cleanName === '独立节点组' || 
+      cleanName === 'custom' || 
+      cleanName === '手工自建' || 
+      customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+
+    if (isCustomGrp) {
+      grpObj.proxies = customNodeNames.length > 0 ? customNodeNames : ['DIRECT'];
+      delete grpObj.use;
+      generatedGroups.push(grpObj);
+      return;
+    }
+
     // Selector / General groups
     const explicitProxies = grp.proxies || [];
     const combinedProxies = new Set<string>(explicitProxies);
 
     // If user explicitly specified `use` or this is a top-level aggregator group
     if (grp.use && grp.use.length > 0) {
+      grp.use.forEach(u => {
+        const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+        const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
+        if (isCustomU) {
+          if (validGroupNames.has(customTagName)) {
+            combinedProxies.add(customTagName);
+          } else {
+            customNodeNames.forEach(name => combinedProxies.add(name));
+          }
+        }
+      });
+
       const mappedUse = grp.use.map(u => {
         const direct = allProviderNames.find(p => p.toLowerCase() === u.toLowerCase());
         if (direct) return direct;
@@ -172,6 +236,10 @@ export function injectUnifiedToMihomo(
     // Add custom nodes or fallback
     if (grp.name === '👉 手动选择' || (combinedProxies.size === 0 && !grpObj.use)) {
       customNodeNames.forEach(name => combinedProxies.add(name));
+    }
+
+    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && validGroupNames.has(customTagName)) {
+      combinedProxies.add(customTagName);
     }
 
     // Filter combinedProxies to only keep valid groups, nodes, or builtins
@@ -282,7 +350,7 @@ export function injectUnifiedToSingbox(
     const key = isCustom ? (sId || 'custom') : sName.toLowerCase();
 
     if (!discoveredSources.has(key)) {
-      const sourceName = sName || (isCustom ? '独立节点组' : sName);
+      const sourceName = sName || (isCustom ? '自建节点' : sName);
       const groupTag = sourceName.startsWith('⚡️') ? sourceName : `⚡️ ${sourceName}`;
       discoveredSources.set(key, {
         groupTag,
@@ -295,30 +363,56 @@ export function injectUnifiedToSingbox(
   // Automatically add dedicated URLTest group for any subscription source that does not yet have a group
   discoveredSources.forEach(info => {
     const cleanName = info.sourceName.toLowerCase();
-    const hasExisting = effectiveGroups.some(g => {
+    const existingGrp = effectiveGroups.find(g => {
       const gClean = g.name.toLowerCase().replace(/^[⚡️\s]+/, '').trim();
-      return gClean === cleanName || g.name.toLowerCase() === info.groupTag.toLowerCase();
+      const gUse = (g.use || []).map(u => u.toLowerCase().replace(/^[⚡️\s]+/, '').trim());
+      if (info.isCustom && (g.id === 'grp-src-custom' || g.id === `grp-src-${info.sourceName}` || gClean === '自建节点' || gClean === '独立节点组' || gClean === cleanName)) {
+        return true;
+      }
+      return gClean === cleanName || g.name.toLowerCase() === info.groupTag.toLowerCase() || gUse.includes(cleanName);
     });
 
-    if (!hasExisting) {
-      const srcGroup: ProxyGroupItem = {
-        id: `grp-src-${info.sourceName}`,
-        name: info.groupTag,
-        type: 'urltest',
-        use: [info.sourceName],
-        tolerance: 50,
-        interval: 300,
-        url: 'https://www.google.com/generate_204',
-      };
-      effectiveGroups.push(srcGroup);
-      existingGroupNames.add(info.groupTag.toLowerCase());
-      existingCleanNames.add(cleanName);
+    if (existingGrp) {
+      if (info.isCustom) {
+        existingGrp.name = info.groupTag;
+        existingGrp.use = [info.sourceName];
+        // Clean out any other stale custom duplicate groups from effectiveGroups
+        const idx = effectiveGroups.indexOf(existingGrp);
+        for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+          if (i !== idx) {
+            const g = effectiveGroups[i];
+            if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+              effectiveGroups.splice(i, 1);
+            }
+          }
+        }
+      }
+      return;
     }
+
+    const srcGroup: ProxyGroupItem = {
+      id: `grp-src-${info.sourceName}`,
+      name: info.groupTag,
+      type: info.isCustom ? 'select' : 'urltest',
+      use: [info.sourceName],
+      tolerance: 50,
+      interval: 300,
+      url: 'https://www.google.com/generate_204',
+    };
+    effectiveGroups.push(srcGroup);
+    existingGroupNames.add(info.groupTag.toLowerCase());
+    existingCleanNames.add(cleanName);
   });
 
   // Ensure '🚀 节点选择' references all active source groups (only if that source group exists in effectiveGroups)
   const mainSelector = effectiveGroups.find(g => g.name === '🚀 节点选择');
   if (mainSelector && mainSelector.proxies) {
+    mainSelector.proxies = mainSelector.proxies.filter(p => {
+      if (p === '⚡️ 独立节点组' || p === '独立节点组') {
+        return effectiveGroups.some(g => g.name === p);
+      }
+      return true;
+    });
     discoveredSources.forEach(info => {
       if (effectiveGroups.some(g => g.name === info.groupTag) && !mainSelector.proxies!.includes(info.groupTag)) {
         mainSelector.proxies!.unshift(info.groupTag);
@@ -359,7 +453,7 @@ export function injectUnifiedToSingbox(
 
     let outboundsList = grp.proxies ? [...grp.proxies] : [];
 
-    // Support use: [ "MESL" ] or [ "独立节点组" ] by matching exact source names
+    // Support use: [ "MESL" ] or [ "自建节点" ] by matching exact source names
     if (grp.use && grp.use.length > 0) {
       const useNormalized = new Set(
         grp.use.map(u => u.trim().toLowerCase().replace(/^[⚡️\s]+/, ''))
@@ -368,7 +462,9 @@ export function injectUnifiedToSingbox(
         .filter(p => {
           const sName = (p._sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
           const sId = (p._sourceId || '').trim().toLowerCase();
-          return useNormalized.has(sName) || useNormalized.has(sId) || (sId === 'custom' && (useNormalized.has('独立节点组') || useNormalized.has('手工自建') || useNormalized.has('custom')));
+          const isCustom = sId === 'custom' || sId.startsWith('custom');
+          return useNormalized.has(sName) || useNormalized.has(sId) || 
+            (isCustom && (useNormalized.has('自建节点') || useNormalized.has('独立节点组') || useNormalized.has('手工自建') || useNormalized.has('custom')));
         })
         .map(p => p.tag);
       outboundsList = Array.from(new Set([...outboundsList, ...matchedNodeTags]));
@@ -384,12 +480,12 @@ export function injectUnifiedToSingbox(
     } else {
       // Auto-match if group name matches a subscription source name
       const cleanGrpName = grp.name.trim().toLowerCase().replace(/^[⚡️\s]+/, '');
-      const isCustomGrp = cleanGrpName === '独立节点组' || cleanGrpName === '手工自建' || cleanGrpName === 'custom';
+      const isCustomGrp = grp.id === 'grp-src-custom' || cleanGrpName === '自建节点' || cleanGrpName === '独立节点组' || cleanGrpName === '手工自建' || cleanGrpName === 'custom' || Array.from(grp.use || []).some(u => u.includes('自建') || u.includes('独立'));
       const matchedNodeTags = proxyOutbounds
         .filter(p => {
           const sName = (p._sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
           const sId = (p._sourceId || '').trim().toLowerCase();
-          if (isCustomGrp) return sId === 'custom' || sName === '独立节点组' || sName === '手工自建';
+          if (isCustomGrp) return sId === 'custom' || sId.startsWith('custom') || sName === '自建节点' || sName === '独立节点组' || sName === '手工自建' || sName === cleanGrpName;
           return sName === cleanGrpName;
         })
         .map(p => p.tag);
@@ -704,11 +800,47 @@ export function injectUnifiedToLoon(
   const remoteRules = activeRules.filter(r => r.kind === 'remote');
   const localRules = activeRules.filter(r => r.kind === 'local');
 
+  const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
+  const customTagName = customSources[0]?.name 
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+    : '⚡️ 自建节点';
+
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
     ...g,
     proxies: g.proxies ? [...g.proxies] : undefined,
     use: g.use ? [...g.use] : undefined,
   }));
+
+  // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
+  const customGrp = effectiveGroups.find(g => 
+    g.id === 'grp-src-custom' || 
+    g.name === customTagName || 
+    g.name === '⚡️ 独立节点组' || 
+    g.name === '独立节点组'
+  );
+  if (customGrp) {
+    customGrp.name = customTagName;
+    customGrp.use = [customSources[0]?.name || '自建节点'];
+    const idx = effectiveGroups.indexOf(customGrp);
+    for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+      if (i !== idx) {
+        const g = effectiveGroups[i];
+        if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+    effectiveGroups.forEach(grp => {
+      if (grp !== customGrp) {
+        if (grp.use) {
+          grp.use = grp.use.map(u => (u === '独立节点组' || u === '⚡️ 独立节点组' ? (customSources[0]?.name || '自建节点') : u));
+        }
+        if (grp.proxies) {
+          grp.proxies = grp.proxies.map(p => (p === '⚡️ 独立节点组' || p === '独立节点组' ? customTagName : p));
+        }
+      }
+    });
+  }
 
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
@@ -760,8 +892,13 @@ export function injectUnifiedToLoon(
     const tag = s.name.replace(/[=,]/g, '_').trim();
     sourceGroupTags.push(tag.startsWith('⚡️') ? tag : `⚡️ ${tag}`);
   });
-  if (customNodes.length > 0) {
-    sourceGroupTags.push('⚡️ 独立节点组');
+  if (customSources.length > 0) {
+    customSources.forEach(cs => {
+      const tag = cs.name.replace(/[=,]/g, '_').trim();
+      sourceGroupTags.push(tag.startsWith('⚡️') ? tag : `⚡️ ${tag}`);
+    });
+  } else if (customNodes.length > 0) {
+    sourceGroupTags.push('⚡️ 自建节点');
   }
 
   const existingGroupNames = new Set(effectiveGroups.map(g => g.name.toLowerCase()));
@@ -841,7 +978,8 @@ export function injectUnifiedToLoon(
       return;
     }
 
-    if (cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建') {
+    const isCustomGrp = grp.id === 'grp-src-custom' || cleanName === '自建节点' || cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+    if (isCustomGrp) {
       const members = customNodeNames.length > 0 ? customNodeNames : ['DIRECT'];
       groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
       return;
@@ -867,7 +1005,8 @@ export function injectUnifiedToLoon(
           const matchedNodes = nodes.filter(n => {
             const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
             const sId = (n.sourceId || '').trim().toLowerCase();
-            return sName === cleanU || sId === cleanU || (sId === 'custom' && (cleanU === '独立节点组' || cleanU === '手工自建'));
+            const isCustom = sId === 'custom' || sId.startsWith('custom');
+            return sName === cleanU || sId === cleanU || (isCustom && (cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU)));
           }).map(n => n.name.replace(/[=,]/g, '_'));
           matchedNodes.forEach(m => {
             if (!proxies.includes(m)) proxies.unshift(m);
@@ -921,8 +1060,9 @@ export function injectUnifiedToLoon(
     }
   });
 
-  if (customNodes.length > 0 && !existingGroupNames.has('⚡️ 独立节点组') && !existingGroupNames.has('独立节点组')) {
-    groupLines.push(`⚡️ 独立节点组 = select, ${customNodeNames.join(', ')}`);
+  if (customNodes.length > 0 && !effectiveGroups.some(g => g.id === 'grp-src-custom' || g.name.includes('自建') || g.name.includes('独立'))) {
+    const customTagName = customSources[0]?.name ? `⚡️ ${customSources[0].name}` : '⚡️ 自建节点';
+    groupLines.push(`${customTagName} = select, ${customNodeNames.join(', ')}`);
   }
 
   // 4. Build [Rule]
@@ -1080,6 +1220,42 @@ export function injectUnifiedToQuantumultX(
   const customNodeNames = qxSupportedCustomNodes.map(n => n.name.replace(/[=,]/g, '_'));
   const allNodeNames = qxSupportedNodes.map(n => n.name.replace(/[=,]/g, '_'));
 
+  const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
+  const customTagName = customSources[0]?.name 
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+    : '⚡️ 自建节点';
+
+  // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
+  const customGrp = effectiveGroups.find(g => 
+    g.id === 'grp-src-custom' || 
+    g.name === customTagName || 
+    g.name === '⚡️ 独立节点组' || 
+    g.name === '独立节点组'
+  );
+  if (customGrp) {
+    customGrp.name = customTagName;
+    customGrp.use = [customSources[0]?.name || '自建节点'];
+    const idx = effectiveGroups.indexOf(customGrp);
+    for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+      if (i !== idx) {
+        const g = effectiveGroups[i];
+        if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+    effectiveGroups.forEach(grp => {
+      if (grp !== customGrp) {
+        if (grp.use) {
+          grp.use = grp.use.map(u => (u === '独立节点组' || u === '⚡️ 独立节点组' ? (customSources[0]?.name || '自建节点') : u));
+        }
+        if (grp.proxies) {
+          grp.proxies = grp.proxies.map(p => (p === '⚡️ 独立节点组' || p === '独立节点组' ? customTagName : p));
+        }
+      }
+    });
+  }
+
   // 1. Build [server_remote]
   const serverRemoteLines: string[] = [];
   if (!expandNodes) {
@@ -1139,7 +1315,14 @@ export function injectUnifiedToQuantumultX(
 
     // Dedicated custom node group
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    if (cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建') {
+    const isCustomGrp = grp.id === 'grp-src-custom' || 
+      cleanName === '自建节点' || 
+      cleanName === '独立节点组' || 
+      cleanName === 'custom' || 
+      cleanName === '手工自建' || 
+      customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+
+    if (isCustomGrp) {
       const members = customNodeNames.length > 0 ? customNodeNames : ['direct'];
       groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
       return;
@@ -1148,20 +1331,21 @@ export function injectUnifiedToQuantumultX(
     // Standard selector group
     let proxies = grp.proxies ? [...grp.proxies] : [];
 
-    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes('⚡️ 独立节点组')) {
-      proxies.unshift('⚡️ 独立节点组');
+    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes(customTagName)) {
+      proxies.unshift(customTagName);
     }
 
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-        if (cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建') {
+        const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
+        if (isCustomU) {
           if (expandNodes) {
             customNodeNames.forEach(m => {
               if (!proxies.includes(m)) proxies.push(m);
             });
           } else {
-            if (!proxies.includes('⚡️ 独立节点组')) proxies.unshift('⚡️ 独立节点组');
+            if (!proxies.includes(customTagName)) proxies.unshift(customTagName);
           }
         }
       });
@@ -1292,11 +1476,47 @@ export function injectUnifiedToEgern(
   const customNodeNames = customNodes.map(n => n.name);
   const allNodeNames = nodes.map(n => n.name);
 
+  const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
+  const customTagName = customSources[0]?.name 
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+    : '⚡️ 自建节点';
+
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
     ...g,
     proxies: g.proxies ? [...g.proxies] : undefined,
     use: g.use ? [...g.use] : undefined,
   }));
+
+  // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
+  const customGrp = effectiveGroups.find(g => 
+    g.id === 'grp-src-custom' || 
+    g.name === customTagName || 
+    g.name === '⚡️ 独立节点组' || 
+    g.name === '独立节点组'
+  );
+  if (customGrp) {
+    customGrp.name = customTagName;
+    customGrp.use = [customSources[0]?.name || '自建节点'];
+    const idx = effectiveGroups.indexOf(customGrp);
+    for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+      if (i !== idx) {
+        const g = effectiveGroups[i];
+        if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+    effectiveGroups.forEach(grp => {
+      if (grp !== customGrp) {
+        if (grp.use) {
+          grp.use = grp.use.map(u => (u === '独立节点组' || u === '⚡️ 独立节点组' ? (customSources[0]?.name || '自建节点') : u));
+        }
+        if (grp.proxies) {
+          grp.proxies = grp.proxies.map(p => (p === '⚡️ 独立节点组' || p === '独立节点组' ? customTagName : p));
+        }
+      }
+    });
+  }
 
   const generatedGroups: any[] = [];
   effectiveGroups.forEach(grp => {
@@ -1354,7 +1574,14 @@ export function injectUnifiedToEgern(
     }
 
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    if (cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建') {
+    const isCustomGrp = grp.id === 'grp-src-custom' || 
+      cleanName === '自建节点' || 
+      cleanName === '独立节点组' || 
+      cleanName === 'custom' || 
+      cleanName === '手工自建' || 
+      customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+
+    if (isCustomGrp) {
       generatedGroups.push({
         name: grp.name,
         type: 'select',
@@ -1364,20 +1591,21 @@ export function injectUnifiedToEgern(
     }
 
     let proxies = grp.proxies ? [...grp.proxies] : [];
-    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes('⚡️ 独立节点组')) {
-      proxies.unshift('⚡️ 独立节点组');
+    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes(customTagName)) {
+      proxies.unshift(customTagName);
     }
 
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-        if (cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建') {
+        const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
+        if (isCustomU) {
           if (options?.expandNodes) {
             customNodeNames.forEach(m => {
               if (!proxies.includes(m)) proxies.push(m);
             });
           } else {
-            if (!proxies.includes('⚡️ 独立节点组')) proxies.unshift('⚡️ 独立节点组');
+            if (!proxies.includes(customTagName)) proxies.unshift(customTagName);
           }
         }
       });
@@ -1438,11 +1666,47 @@ export function injectUnifiedToShadowrocket(
   const remoteRules = activeRules.filter(r => r.kind === 'remote');
   const localRules = activeRules.filter(r => r.kind === 'local');
 
+  const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
+  const customTagName = customSources[0]?.name 
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+    : '⚡️ 自建节点';
+
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
     ...g,
     proxies: g.proxies ? [...g.proxies] : undefined,
     use: g.use ? [...g.use] : undefined,
   }));
+
+  // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
+  const customGrp = effectiveGroups.find(g => 
+    g.id === 'grp-src-custom' || 
+    g.name === customTagName || 
+    g.name === '⚡️ 独立节点组' || 
+    g.name === '独立节点组'
+  );
+  if (customGrp) {
+    customGrp.name = customTagName;
+    customGrp.use = [customSources[0]?.name || '自建节点'];
+    const idx = effectiveGroups.indexOf(customGrp);
+    for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+      if (i !== idx) {
+        const g = effectiveGroups[i];
+        if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+    effectiveGroups.forEach(grp => {
+      if (grp !== customGrp) {
+        if (grp.use) {
+          grp.use = grp.use.map(u => (u === '独立节点组' || u === '⚡️ 独立节点组' ? (customSources[0]?.name || '自建节点') : u));
+        }
+        if (grp.proxies) {
+          grp.proxies = grp.proxies.map(p => (p === '⚡️ 独立节点组' || p === '独立节点组' ? customTagName : p));
+        }
+      }
+    });
+  }
 
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
@@ -1459,14 +1723,13 @@ export function injectUnifiedToShadowrocket(
 
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
-        const customSrc = sources.find(s => s.type === 'custom' && (s.name === u || s.id === u));
-        if (customSrc) {
+        const customSrc = sources.find(s => (s.type === 'custom' || s.id === 'custom') && (s.name === u || s.id === u));
+        const isCustomU = u === '自建节点' || u === '独立节点组' || u === 'custom' || u === '手工自建' || customSources.some(cs => cs.name === u);
+        if (customSrc || isCustomU) {
           const groupNodes = nodes
-            .filter(n => n.sourceId === customSrc.id || n.sourceName === customSrc.name)
+            .filter(n => n.sourceId === (customSrc?.id || 'custom') || n.sourceName === (customSrc?.name || u) || (!n.sourceId && isCustomU))
             .map(n => n.name.replace(/[=,]/g, '_'));
-          members.push(...groupNodes);
-        } else if (u === '独立节点组' || u === 'custom') {
-          members.push(...customNodeNames);
+          members.push(...(groupNodes.length > 0 ? groupNodes : customNodeNames));
         } else {
           const matchedSrc = networkSources.find(s => s.name === u || s.id === u);
           if (matchedSrc) {
@@ -1491,7 +1754,8 @@ export function injectUnifiedToShadowrocket(
         } else if (p === 'REJECT' || p === '🛑 广告拦截' || p === '🛑 全局拦截') {
           members.push('REJECT');
         } else {
-          members.push(p.replace(/[=,]/g, '_'));
+          const cleanP = (p === '⚡️ 独立节点组' || p === '独立节点组') ? customTagName : p;
+          members.push(cleanP.replace(/[=,]/g, '_'));
         }
       });
     }
@@ -1528,8 +1792,8 @@ export function injectUnifiedToShadowrocket(
     }
   });
 
-  if (customNodes.length > 0 && !existingGroupNames.has('⚡️ 独立节点组') && !existingGroupNames.has('独立节点组')) {
-    groupLines.push(`⚡️ 独立节点组 = select, ${customNodeNames.join(', ')}`);
+  if (customNodes.length > 0 && !effectiveGroups.some(g => g.id === 'grp-src-custom' || g.name.includes('自建') || g.name.includes('独立') || customSources.some(cs => g.name.includes(cs.name)))) {
+    groupLines.push(`${customTagName} = select, ${customNodeNames.join(', ')}`);
   }
 
   // 2. Build [Rule]

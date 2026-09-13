@@ -56,15 +56,15 @@ export function resolveNodesForGroup(
     return allNodes.filter(n => {
       const srcName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
       const srcId = (n.sourceId || '').trim().toLowerCase();
-      return useNormalized.has(srcName) || useNormalized.has(srcId) || (srcId === 'custom' && (useNormalized.has('独立节点组') || useNormalized.has('手工自建')));
+      return useNormalized.has(srcName) || useNormalized.has(srcId) || (srcId === 'custom' && (useNormalized.has('自建节点') || useNormalized.has('独立节点组') || useNormalized.has('手工自建')));
     });
   }
 
-  // 3. Match group name to source name (e.g. group named "⚡️ 独立节点组" or "独立节点组")
+  // 3. Match group name to source name (e.g. group named "⚡️ 自建节点" or "自建节点")
   const cleanGroupName = group.name.trim().toLowerCase().replace(/^[⚡️\s]+/, '');
   const matchedSource = sources.find(
     s => s.name.trim().toLowerCase().replace(/^[⚡️\s]+/, '') === cleanGroupName ||
-      (s.id === 'custom' && (cleanGroupName === '独立节点组' || cleanGroupName === '手工自建' || cleanGroupName === 'custom'))
+      (s.id === 'custom' && (cleanGroupName === '自建节点' || cleanGroupName === '独立节点组' || cleanGroupName === '手工自建' || cleanGroupName === 'custom' || cleanGroupName === s.name.trim().toLowerCase().replace(/^[⚡️\s]+/, '')))
   );
   if (matchedSource) {
     return allNodes.filter(n => n.sourceId === matchedSource.id || n.sourceName === matchedSource.name);
@@ -113,11 +113,14 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
   });
 
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
+  const customSrc = sources.find(s => s.id === 'custom' || s.type === 'custom');
+  const customSourceName = (customSrc?.name || '自建节点').replace(/^[⚡️\s]+/, '').trim();
+  const customSourceTag = `⚡️ ${customSourceName}`;
 
   const standardOutbounds = ['🚀 节点选择', '🎯 本地直连', '♻️ 自动选择', '👉 手动选择'];
   const groupOutbounds = groups.map(g => g.name);
   const sourceOutbounds = sources.filter(s => s.enabled).map(s => {
-    const label = s.id === 'custom' ? '独立节点组' : s.name.replace(/^[⚡️\s]+/, '');
+    const label = s.name.replace(/^[⚡️\s]+/, '').trim() || (s.id === 'custom' ? '自建节点' : s.name);
     return `⚡️ ${label}`;
   });
 
@@ -125,19 +128,19 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     ...standardOutbounds,
     ...sourceOutbounds,
     ...groupOutbounds,
-    ...(customNodes.length > 0 ? ['⚡️ 独立节点组'] : []),
+    ...(customNodes.length > 0 ? [customSourceTag] : []),
   ]));
 
   const hasCustomGroup = groups.some(g => {
     const clean = g.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    return clean === '独立节点组' || clean === '手工自建' || clean === 'custom';
+    return clean === customSourceName.toLowerCase() || clean === '自建节点' || clean === '独立节点组' || clean === '手工自建' || clean === 'custom' || g.id === 'grp-src-custom';
   });
 
   const handleAddCustomGroup = async () => {
     await onAddGroup({
-      name: '⚡️ 独立节点组',
+      name: customSourceTag,
       type: 'select',
-      use: ['独立节点组'],
+      use: [customSourceName],
     });
   };
 
@@ -266,8 +269,8 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     }
     const cleanName = outboundName.replace(/^[⚡️\s]+/, '').toLowerCase();
     const targetSource = sources.find(s => {
-      const sName = s.id === 'custom' ? '独立节点组' : s.name.replace(/^[⚡️\s]+/, '');
-      return sName.toLowerCase() === cleanName || (s.id === 'custom' && cleanName === '手工自建');
+      const sName = (s.name || (s.id === 'custom' ? '自建节点' : '')).replace(/^[⚡️\s]+/, '').toLowerCase();
+      return sName === cleanName || (s.id === 'custom' && (cleanName === '自建节点' || cleanName === '独立节点组' || cleanName === '手工自建'));
     });
     if (targetSource) {
       return targetSource.nodeCount || targetSource.nodes?.length || 0;
@@ -296,10 +299,10 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
             <button
               onClick={handleAddCustomGroup}
               className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-xl bg-[#EAF2EE] text-[#2D6A5A] border border-[#D5E5DE] hover:bg-[#D5E5DE] transition-all cursor-pointer"
-              title="为当前独立节点创建独立节点组策略"
+              title={`为当前${customSourceName}创建策略组`}
             >
               <Zap className="w-3.5 h-3.5" />
-              <span>新建独立节点组 ({customNodes.length})</span>
+              <span>新建{customSourceName} ({customNodes.length})</span>
             </button>
           )}
 
@@ -689,7 +692,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                 const sourceMap = new Map<string, { tag: string; label: string; nodeCount?: number; id: string }>();
                 sources.forEach(src => {
                   const isInternalCustom = src.id === 'custom' || src.type === 'custom';
-                  const label = isInternalCustom ? '独立节点组' : src.name.replace(/^[⚡️\s]+/, '');
+                  const label = src.name.replace(/^[⚡️\s]+/, '').trim() || (isInternalCustom ? '自建节点' : src.name);
                   const tag = `⚡️ ${label}`;
                   const key = isInternalCustom ? 'custom' : label.toLowerCase();
                   const count = isInternalCustom ? customNodes.length : (src.nodeCount || src.nodes?.length || 0);
@@ -707,8 +710,8 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                 if (customNodes.length > 0 && !sourceMap.has('custom')) {
                   sourceMap.set('custom', {
                     id: 'custom',
-                    tag: '⚡️ 独立节点组',
-                    label: '独立节点组',
+                    tag: customSourceTag,
+                    label: customSourceName,
                     nodeCount: customNodes.length,
                   });
                 }
@@ -729,7 +732,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                         const isSelected = (formData.use || []).some(
                           u => u.toLowerCase().replace(/^[⚡️\s]+/, '') === src.label.toLowerCase() ||
                             u.toLowerCase() === src.label.toLowerCase() ||
-                            (src.id === 'custom' && (u === '独立节点组' || u === '手工自建' || u === 'custom'))
+                            (src.id === 'custom' && (u === '自建节点' || u === '独立节点组' || u === '手工自建' || u === 'custom'))
                         );
                         return (
                           <button
