@@ -185,5 +185,48 @@ Subone 支持为各个客户端自定义基础模版。所有模版文件统一�
 | [templates/proxy-groups.json](templates/proxy-groups.json) | 策略组模版 | 默认内置策略组（节点选择、AI 服务、国外域名、国内服务、自动测速等） |
 | [templates/country-rules.json](templates/country-rules.json) | 地区识别规则 | 默认国家/地区正则匹配与策略组映射规则（香港、台湾、日本、美国等） |
 
+---
 
+## 路由器 / OpenWrt 自动更新脚本
 
+对于部署在 OpenWrt 或 Linux 软路由 / 旁路由上的 Sing-box 透明网关，在 [tools/update-singbox.sh](tools/update-singbox.sh) 提供了订阅更新脚本，配套 [templates/singbox-gateway.json](templates/singbox-gateway.json) 模版使用。
+
+### 使用方法
+
+#### 1. 下载脚本到路由器
+```bash
+# 下载到管理目录（如 /root）并赋予执行权限
+curl -sSL -o /root/update-singbox.sh https://raw.githubusercontent.com/cfm019/subone/main/tools/update-singbox.sh
+chmod +x /root/update-singbox.sh
+```
+
+#### 2. 执行更新
+支持以下任一方式传入您的 Sing-box 订阅链接（注意路径后带 `/singbox`）：
+
+```bash
+# 方式 1：命令行直接传参（推荐）
+/root/update-singbox.sh "https://sub.yourdomain.com/s/YOUR_TOKEN/singbox"
+
+# 方式 2：通过环境变量执行
+SUB_URL="https://sub.yourdomain.com/s/YOUR_TOKEN/singbox" /root/update-singbox.sh
+
+# 方式 3：编辑脚本开头的 SUB_URL 变量后直接执行
+/root/update-singbox.sh
+```
+
+#### 3. 可选环境变量与路径调整
+根据路由固件环境，可通过环境变量覆盖默认路径：
+
+| 环境变量 | 默认值 | 说明 |
+| :--- | :--- | :--- |
+| `SUB_URL` | *(必填)* | SubOne 的 Sing-box 订阅链接 |
+| `TARGET_CONF` | `/etc/sing-box/config.json` | 路由器上 sing-box 的配置文件目标路径 |
+| `SINGBOX_BIN` | `/usr/bin/sing-box` | sing-box 核心二进制程序路径 |
+| `RELOAD_CMD` | `/etc/init.d/sing-box restart` | 重载/重启 sing-box 服务的命令 (systemd 环境可设为 `systemctl restart sing-box`) |
+
+#### 4. 配置定时自动更新 (Crontab)
+在 OpenWrt 终端执行 `crontab -e`，添加定时任务（如每天凌晨 4:00 自动更新并记录日志）：
+
+```cron
+0 4 * * * /root/update-singbox.sh "https://sub.yourdomain.com/s/YOUR_TOKEN/singbox" >> /var/log/update-singbox.log 2>&1
+```

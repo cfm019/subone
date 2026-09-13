@@ -9,7 +9,7 @@
 - DOMAIN-SUFFIX,i234.me, dscloud.me, synology.me, synology.com, quickconnect.to, mycloudnas.com,🎯 本地直连,no-resolve  # NAS 域名直连 (IPv6 DDNS)
 
 # --- AI 服务本地分流规则 (OpenAI / Claude / Gemini / Grok / Cursor 等) ---
-- DOMAIN-SUFFIX,chatgpt.com, openai.com, oaistatic.com, oaiusercontent.com, ai.com, sora.com, claude.ai, claude.com, anthropic.com, claudeusercontent.com, clau.de, gemini.google.com, generativelanguage.googleapis.com, aistudio.google.com, ai.google.dev, notebooklm.google.com, notebooklm.google, labs.google, deepmind.google, deepmind.com, grok.com, x.ai, cursor.sh, cursor.com, cursorvm.com, perplexity.ai, poe.com, mistral.ai, cohere.com, copilot.microsoft.com, sydney.bing.com, bard.google.com, makersuite.google.com,🤖 AI 服务,no-resolve  # AI 域名后缀
+- DOMAIN-SUFFIX,chatgpt.com, openai.com, oaistatic.com, oaiusercontent.com, ai.com, sora.com, claude.ai, claude.com, anthropic.com, claudeusercontent.com, clau.de, gemini.google.com, googleapis.com, aistudio.google.com, ai.google.dev, notebooklm.google.com, notebooklm.google, labs.google, deepmind.google, deepmind.com, grok.com, x.ai, cursor.sh, cursor.com, cursorvm.com, perplexity.ai, poe.com, mistral.ai, cohere.com, copilot.microsoft.com, sydney.bing.com, bard.google.com, makersuite.google.com,🤖 AI 服务,no-resolve  # AI 域名后缀
 - DOMAIN,alkalimakersuite-pa.clients6.google.com, jules.google.com,🤖 AI 服务,no-resolve  # AI 完整域名
 - DOMAIN-KEYWORD,openai, chatgpt, claude, anthropic, cursor, perplexity,🤖 AI 服务,no-resolve  # AI 域名关键字
 

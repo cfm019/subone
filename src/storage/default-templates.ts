@@ -344,7 +344,7 @@ export const FALLBACK_RULES_LIST: UnifiedRuleItem[] = [
     name: 'AI 域名后缀',
     kind: 'local',
     type: 'DOMAIN-SUFFIX',
-    payload: 'chatgpt.com, openai.com, oaistatic.com, oaiusercontent.com, ai.com, sora.com, claude.ai, claude.com, anthropic.com, claudeusercontent.com, clau.de, gemini.google.com, generativelanguage.googleapis.com, aistudio.google.com, ai.google.dev, notebooklm.google.com, notebooklm.google, labs.google, deepmind.google, deepmind.com, grok.com, x.ai, cursor.sh, cursor.com, cursorvm.com, perplexity.ai, poe.com, mistral.ai, cohere.com, copilot.microsoft.com, sydney.bing.com, bard.google.com, makersuite.google.com',
+    payload: 'chatgpt.com, openai.com, oaistatic.com, oaiusercontent.com, ai.com, sora.com, claude.ai, claude.com, anthropic.com, claudeusercontent.com, clau.de, gemini.google.com, googleapis.com, aistudio.google.com, ai.google.dev, notebooklm.google.com, notebooklm.google, labs.google, deepmind.google, deepmind.com, grok.com, x.ai, cursor.sh, cursor.com, cursorvm.com, perplexity.ai, poe.com, mistral.ai, cohere.com, copilot.microsoft.com, sydney.bing.com, bard.google.com, makersuite.google.com',
     outbound: '🤖 AI 服务',
     enabled: true,
   },
