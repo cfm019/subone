@@ -689,15 +689,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
             onClick={e => e.stopPropagation()}
           >
             {/* Header */}
-            <div className="px-5 py-3.5 border-b border-[#E3DDD2] bg-[#FAF8F5] flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
+            <div className="relative px-5 py-3.5 border-b border-[#E3DDD2] bg-[#FAF8F5] flex flex-wrap items-center justify-between gap-3 pr-14">
+              <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-8 h-8 rounded-lg bg-[#FAF0EC] flex items-center justify-center text-[#CC785C] shrink-0">
                   <FileCode className="w-4 h-4" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h3 className="text-sm font-bold text-[#1F1E1D]">订阅文件预览</h3>
-                    <span className="px-2 py-0.5 rounded-md bg-[#ECE7DE] text-[11px] font-medium text-[#4A4742]">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="text-sm font-bold text-[#1F1E1D] shrink-0">订阅文件预览</h3>
+                    <span className="px-2 py-0.5 rounded-md bg-[#ECE7DE] text-[11px] font-medium text-[#4A4742] truncate max-w-[200px]">
                       {previewData.profileName}
                     </span>
                   </div>
@@ -707,41 +707,40 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               </div>
 
-              {/* 格式切换与操作 */}
-              <div className="flex items-center gap-2">
-                <div className="inline-flex rounded-xl border border-[#E3DDD2] p-1 bg-white text-xs shadow-2xs">
-                  {([
-                    { type: 'singbox', label: 'Sing-box', format: 'JSON' },
-                    { type: 'mihomo', label: 'Mihomo', format: 'YAML' },
-                    { type: 'loon', label: 'Loon', format: 'CONF' },
-                    { type: 'quantumultx', label: 'Quantumult X', format: 'CONF' },
-                    { type: 'egern', label: 'Egern', format: 'YAML' },
-                    { type: 'shadowrocket', label: '小火箭', format: 'CONF' },
-                  ] as const).map(({ type, label, format }) => (
-                    <button
-                      key={type}
-                      onClick={() => handlePreviewProfile(previewData.profile, type)}
-                      className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 ${previewData.clientType === type
-                        ? 'bg-[#CC785C] text-white shadow-xs font-semibold'
-                        : 'text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#FAF8F5]'
-                        }`}
-                    >
-                      <span>{label}</span>
-                      <span className={`text-[10px] ${previewData.clientType === type ? 'text-white/80' : 'text-[#8C877D]'}`}>
-                        ({format})
-                      </span>
-                    </button>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => setPreviewData(null)}
-                  className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer ml-1"
-                  title="关闭 (Esc)"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+              {/* 格式切换 */}
+              <div className="inline-flex rounded-xl border border-[#E3DDD2] p-1 bg-white text-xs shadow-2xs overflow-x-auto max-w-full">
+                {([
+                  { type: 'singbox', label: 'Sing-box', format: 'JSON' },
+                  { type: 'mihomo', label: 'Mihomo', format: 'YAML' },
+                  { type: 'loon', label: 'Loon', format: 'CONF' },
+                  { type: 'quantumultx', label: 'Quantumult X', format: 'CONF' },
+                  { type: 'egern', label: 'Egern', format: 'YAML' },
+                  { type: 'shadowrocket', label: '小火箭', format: 'CONF' },
+                ] as const).map(({ type, label, format }) => (
+                  <button
+                    key={type}
+                    onClick={() => handlePreviewProfile(previewData.profile, type)}
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${previewData.clientType === type
+                      ? 'bg-[#CC785C] text-white shadow-xs font-semibold'
+                      : 'text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#FAF8F5]'
+                      }`}
+                  >
+                    <span>{label}</span>
+                    <span className={`text-[10px] ${previewData.clientType === type ? 'text-white/80' : 'text-[#8C877D]'}`}>
+                      ({format})
+                    </span>
+                  </button>
+                ))}
               </div>
+
+              {/* 右上角关闭按钮 */}
+              <button
+                onClick={() => setPreviewData(null)}
+                className="absolute top-3.5 right-5 p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer"
+                title="关闭 (Esc)"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
             {/* Meta bar */}

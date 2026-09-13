@@ -49,8 +49,7 @@
           "local",
           "arpa",
           "in-addr.arpa",
-          "ip6.arpa",
-          "ipw.cn"
+          "ip6.arpa"
         ],
         "server": "alidns"
       },
@@ -171,7 +170,6 @@
           "arpa",
           "in-addr.arpa",
           "ip6.arpa",
-          "ipw.cn",
           "i234.me",
           "dscloud.me",
           "synology.me",
