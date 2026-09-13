@@ -372,7 +372,7 @@ async function getEffectiveNodesForProfile(profile: SubscriptionProfile): Promis
   return filtered;
 }
 
-function getEffectiveGroupsForProfile(profile: SubscriptionProfile): ProxyGroupItem[] {
+function getEffectiveGroupsForProfile(profile: SubscriptionProfile, effectiveNodes?: ProxyNode[]): ProxyGroupItem[] {
   if (ensureCustomProxyGroup(appConfig)) {
     saveConfig(appConfig);
   }
@@ -383,11 +383,86 @@ function getEffectiveGroupsForProfile(profile: SubscriptionProfile): ProxyGroupI
   } else {
     groups = appConfig.proxyGroups;
   }
-  return groups.map(g => ({
+  let mappedGroups = groups.map(g => ({
     ...g,
     proxies: g.proxies ? [...g.proxies] : undefined,
     use: g.use ? [...g.use] : undefined,
   }));
+
+  if (Array.isArray(effectiveNodes) && effectiveNodes.length > 0) {
+    const activeSourceIds = new Set<string>();
+    const activeSourceNames = new Set<string>();
+    let hasCustomNodes = false;
+
+    effectiveNodes.forEach(n => {
+      const sId = (n.sourceId || '').trim();
+      const sName = (n.sourceName || '').trim();
+      if (sId) activeSourceIds.add(sId.toLowerCase());
+      if (sName) {
+        activeSourceNames.add(sName.toLowerCase());
+        activeSourceNames.add(sName.toLowerCase().replace(/^[⚡️\s]+/, ''));
+      }
+      if (sId === 'custom' || sId.startsWith('custom') || sName === '自建节点' || sName === '独立节点组') {
+        hasCustomNodes = true;
+      }
+    });
+
+    const isProtectedGroup = (g: ProxyGroupItem) => {
+      const id = (g.id || '').trim();
+      const name = (g.name || '').trim();
+      return (
+        id === 'grp-select' ||
+        id === 'grp-auto' ||
+        id === 'grp-manual' ||
+        name === '🚀 节点选择' ||
+        name === '👉 手动选择' ||
+        name === '♻️ 自动选择' ||
+        name === '🎯 本地直连'
+      );
+    };
+
+    const deadGroupNames = new Set<string>();
+    mappedGroups = mappedGroups.filter(g => {
+      if (isProtectedGroup(g)) return true;
+      const gClean = g.name.toLowerCase().replace(/^[⚡️\s]+/, '').trim();
+      const isCustomGrp = g.id === 'grp-src-custom' || gClean === '自建节点' || gClean === '独立节点组';
+      const isDedicatedSourceGroup = g.id.startsWith('grp-src-') || isCustomGrp;
+      if (!isDedicatedSourceGroup) return true;
+
+      if (isCustomGrp) {
+        if (!hasCustomNodes) {
+          deadGroupNames.add(g.name);
+          return false;
+        }
+        return true;
+      }
+
+      // Dedicated subscription source group
+      const useSrc = (g.use && g.use.length === 1) ? g.use[0].toLowerCase().replace(/^[⚡️\s]+/, '').trim() : gClean;
+      const isActive =
+        activeSourceNames.has(gClean) ||
+        activeSourceNames.has(useSrc) ||
+        (g.id.startsWith('grp-src-') && activeSourceIds.has(g.id.replace('grp-src-', '').toLowerCase()));
+      if (!isActive) {
+        deadGroupNames.add(g.name);
+        return false;
+      }
+      return true;
+    });
+
+    if (deadGroupNames.size > 0) {
+      mappedGroups.forEach(g => {
+        if (g.proxies) {
+          g.proxies = g.proxies.filter(p => !deadGroupNames.has(p));
+        }
+        if (g.use) {
+          g.use = g.use.filter(u => !deadGroupNames.has(u));
+        }
+      });
+    }
+  }
+
+  return mappedGroups;
 }
 
 function getEffectiveSourcesForProfile(profile?: SubscriptionProfile, effectiveNodes?: ProxyNode[]): SubscriptionSource[] {
@@ -1337,7 +1412,7 @@ app.post('/api/generate/preview', async (req, res) => {
       : await getEffectiveNodes();
 
     const groups = targetProfile
-      ? getEffectiveGroupsForProfile(targetProfile)
+      ? getEffectiveGroupsForProfile(targetProfile, nodes)
       : appConfig.proxyGroups;
 
     const rules = targetProfile
@@ -1430,7 +1505,7 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
 
     const templateContent = tpl?.content || '';
     const nodes = await getEffectiveNodesForProfile(profile);
-    const groups = getEffectiveGroupsForProfile(profile);
+    const groups = getEffectiveGroupsForProfile(profile, nodes);
     const rules = getEffectiveRulesForProfile(profile);
     const sources = getEffectiveSourcesForProfile(profile, nodes);
 

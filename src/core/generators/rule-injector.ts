@@ -360,16 +360,90 @@ export function injectUnifiedToSingbox(
     }
   });
 
-  // Automatically add dedicated URLTest group for any subscription source that does not yet have a group
+  // Protected groups that should never be overwritten or matched as a source group
+  const isProtectedGroup = (g: ProxyGroupItem) => {
+    const id = (g.id || '').trim();
+    const name = (g.name || '').trim();
+    return (
+      id === 'grp-select' ||
+      id === 'grp-auto' ||
+      id === 'grp-manual' ||
+      name === '🚀 节点选择' ||
+      name === '👉 手动选择' ||
+      name === '♻️ 自动选择' ||
+      name === '🎯 本地直连'
+    );
+  };
+
+  // Prune any dedicated source groups from effectiveGroups that have NO active nodes in discoveredSources
+  const activeDiscoveredTags = new Set(Array.from(discoveredSources.values()).map(s => s.groupTag.toLowerCase()));
+  const activeDiscoveredNames = new Set(Array.from(discoveredSources.values()).map(s => s.sourceName.toLowerCase()));
+  const hasDiscoveredCustom = Array.from(discoveredSources.values()).some(s => s.isCustom);
+
+  const deadGroupTags = new Set<string>();
+  for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+    const g = effectiveGroups[i];
+    if (isProtectedGroup(g)) continue;
+    const gClean = g.name.toLowerCase().replace(/^[⚡️\s]+/, '').trim();
+    const isCustomGrp = g.id === 'grp-src-custom' || gClean === '自建节点' || gClean === '独立节点组';
+    const isDedicatedSourceGroup = g.id.startsWith('grp-src-') || isCustomGrp;
+    if (isDedicatedSourceGroup) {
+      if (isCustomGrp) {
+        if (!hasDiscoveredCustom) {
+          deadGroupTags.add(g.name);
+          effectiveGroups.splice(i, 1);
+        }
+      } else {
+        const useSrc = (g.use && g.use.length === 1) ? g.use[0].toLowerCase().replace(/^[⚡️\s]+/, '').trim() : gClean;
+        const isActive = activeDiscoveredTags.has(g.name.toLowerCase()) ||
+                         activeDiscoveredNames.has(gClean) ||
+                         activeDiscoveredNames.has(useSrc);
+        if (!isActive) {
+          deadGroupTags.add(g.name);
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+  }
+
+  // Clean up references to deadGroupTags across all remaining groups
+  if (deadGroupTags.size > 0) {
+    effectiveGroups.forEach(grp => {
+      if (grp.proxies) {
+        grp.proxies = grp.proxies.filter(p => !deadGroupTags.has(p));
+      }
+      if (grp.use) {
+        grp.use = grp.use.filter(u => {
+          const cleanU = u.toLowerCase().replace(/^[⚡️\s]+/, '').trim();
+          if (deadGroupTags.has(u)) return false;
+          if (cleanU === '自建节点' || cleanU === '独立节点组') return hasDiscoveredCustom;
+          return activeDiscoveredNames.has(cleanU) || cleanU === 'all' || cleanU === 'proxy';
+        });
+      }
+    });
+  }
+
+  // Automatically add dedicated URLTest / select group for any discovered source that does not yet have a group
   discoveredSources.forEach(info => {
     const cleanName = info.sourceName.toLowerCase();
     const existingGrp = effectiveGroups.find(g => {
+      if (isProtectedGroup(g)) return false;
       const gClean = g.name.toLowerCase().replace(/^[⚡️\s]+/, '').trim();
-      const gUse = (g.use || []).map(u => u.toLowerCase().replace(/^[⚡️\s]+/, '').trim());
-      if (info.isCustom && (g.id === 'grp-src-custom' || g.id === `grp-src-${info.sourceName}` || gClean === '自建节点' || gClean === '独立节点组' || gClean === cleanName)) {
-        return true;
+      if (info.isCustom) {
+        return (
+          g.id === 'grp-src-custom' ||
+          g.id === `grp-src-${info.sourceName}` ||
+          gClean === '自建节点' ||
+          gClean === '独立节点组' ||
+          gClean === cleanName ||
+          g.name.toLowerCase() === info.groupTag.toLowerCase()
+        );
       }
-      return gClean === cleanName || g.name.toLowerCase() === info.groupTag.toLowerCase() || gUse.includes(cleanName);
+      return (
+        g.id === `grp-src-${info.sourceName}` ||
+        gClean === cleanName ||
+        g.name.toLowerCase() === info.groupTag.toLowerCase()
+      );
     });
 
     if (existingGrp) {
@@ -381,7 +455,7 @@ export function injectUnifiedToSingbox(
         for (let i = effectiveGroups.length - 1; i >= 0; i--) {
           if (i !== idx) {
             const g = effectiveGroups[i];
-            if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+            if (!isProtectedGroup(g) && (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组')) {
               effectiveGroups.splice(i, 1);
             }
           }
@@ -408,6 +482,7 @@ export function injectUnifiedToSingbox(
   const mainSelector = effectiveGroups.find(g => g.name === '🚀 节点选择');
   if (mainSelector && mainSelector.proxies) {
     mainSelector.proxies = mainSelector.proxies.filter(p => {
+      if (deadGroupTags.has(p)) return false;
       if (p === '⚡️ 独立节点组' || p === '独立节点组') {
         return effectiveGroups.some(g => g.name === p);
       }
