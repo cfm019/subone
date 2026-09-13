@@ -79,8 +79,8 @@ export function injectUnifiedToMihomo(
 
   // 2. Build Proxy Groups
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
-  const customTagName = customSources[0]?.name 
-    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+  const customTagName = customSources[0]?.name
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`)
     : '⚡️ 自建节点';
 
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
@@ -90,10 +90,10 @@ export function injectUnifiedToMihomo(
   }));
 
   // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
-  const customGrp = effectiveGroups.find(g => 
-    g.id === 'grp-src-custom' || 
-    g.name === customTagName || 
-    g.name === '⚡️ 独立节点组' || 
+  const customGrp = effectiveGroups.find(g =>
+    g.id === 'grp-src-custom' ||
+    g.name === customTagName ||
+    g.name === '⚡️ 独立节点组' ||
     g.name === '独立节点组'
   );
   if (customGrp) {
@@ -183,11 +183,11 @@ export function injectUnifiedToMihomo(
 
     // Custom dedicated node group
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    const isCustomGrp = grp.id === 'grp-src-custom' || 
-      cleanName === '自建节点' || 
-      cleanName === '独立节点组' || 
-      cleanName === 'custom' || 
-      cleanName === '手工自建' || 
+    const isCustomGrp = grp.id === 'grp-src-custom' ||
+      cleanName === '自建节点' ||
+      cleanName === '独立节点组' ||
+      cleanName === 'custom' ||
+      cleanName === '手工自建' ||
       customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
 
     if (isCustomGrp) {
@@ -396,8 +396,8 @@ export function injectUnifiedToSingbox(
       } else {
         const useSrc = (g.use && g.use.length === 1) ? g.use[0].toLowerCase().replace(/^[⚡️\s]+/, '').trim() : gClean;
         const isActive = activeDiscoveredTags.has(g.name.toLowerCase()) ||
-                         activeDiscoveredNames.has(gClean) ||
-                         activeDiscoveredNames.has(useSrc);
+          activeDiscoveredNames.has(gClean) ||
+          activeDiscoveredNames.has(useSrc);
         if (!isActive) {
           deadGroupTags.add(g.name);
           effectiveGroups.splice(i, 1);
@@ -538,7 +538,7 @@ export function injectUnifiedToSingbox(
           const sName = (p._sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
           const sId = (p._sourceId || '').trim().toLowerCase();
           const isCustom = sId === 'custom' || sId.startsWith('custom');
-          return useNormalized.has(sName) || useNormalized.has(sId) || 
+          return useNormalized.has(sName) || useNormalized.has(sId) ||
             (isCustom && (useNormalized.has('自建节点') || useNormalized.has('独立节点组') || useNormalized.has('手工自建') || useNormalized.has('custom')));
         })
         .map(p => p.tag);
@@ -621,7 +621,7 @@ export function injectUnifiedToSingbox(
 
   // Ensure 🎯 本地直连 always exists
   const hasDirect = groupOutbounds.some((g: any) => g.tag === '🎯 本地直连' || g.type === 'direct') ||
-                    customTemplateOutbounds.some((g: any) => g.tag === '🎯 本地直连' || g.type === 'direct');
+    customTemplateOutbounds.some((g: any) => g.tag === '🎯 本地直连' || g.type === 'direct');
   if (!hasDirect) {
     groupOutbounds.push({
       tag: '🎯 本地直连',
@@ -631,7 +631,7 @@ export function injectUnifiedToSingbox(
 
   // Ensure REJECT always exists
   const hasReject = groupOutbounds.some((g: any) => g.tag === 'REJECT' || g.type === 'block') ||
-                    customTemplateOutbounds.some((g: any) => g.tag === 'REJECT' || g.type === 'block');
+    customTemplateOutbounds.some((g: any) => g.tag === 'REJECT' || g.type === 'block');
   if (!hasReject) {
     groupOutbounds.push({
       tag: 'REJECT',
@@ -641,11 +641,11 @@ export function injectUnifiedToSingbox(
 
   // Ensure GLOBAL selector exists for Clash API Global mode
   const hasGlobal = groupOutbounds.some((g: any) => g.tag === 'GLOBAL') ||
-                    customTemplateOutbounds.some((g: any) => g.tag === 'GLOBAL');
+    customTemplateOutbounds.some((g: any) => g.tag === 'GLOBAL');
   if (!hasGlobal) {
     const mainSelectorTag = effectiveGroups.find(g => g.name === '🚀 节点选择')?.name ||
-                            effectiveGroups[0]?.name ||
-                            '🎯 本地直连';
+      effectiveGroups[0]?.name ||
+      '🎯 本地直连';
     const globalOutbounds = Array.from(new Set([mainSelectorTag, ...allNodeTags]));
     groupOutbounds.unshift({
       tag: 'GLOBAL',
@@ -757,9 +757,6 @@ export function injectUnifiedToSingbox(
         'arpa',
         'in-addr.arpa',
         'ip6.arpa',
-        'gstatic.com',
-        'gvt1.com',
-        'cp.cloudflare.com',
         ...directDomainSuffixes,
       ]));
       dnsRules.push({
@@ -876,8 +873,8 @@ export function injectUnifiedToLoon(
   const localRules = activeRules.filter(r => r.kind === 'local');
 
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
-  const customTagName = customSources[0]?.name 
-    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+  const customTagName = customSources[0]?.name
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`)
     : '⚡️ 自建节点';
 
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
@@ -887,10 +884,10 @@ export function injectUnifiedToLoon(
   }));
 
   // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
-  const customGrp = effectiveGroups.find(g => 
-    g.id === 'grp-src-custom' || 
-    g.name === customTagName || 
-    g.name === '⚡️ 独立节点组' || 
+  const customGrp = effectiveGroups.find(g =>
+    g.id === 'grp-src-custom' ||
+    g.name === customTagName ||
+    g.name === '⚡️ 独立节点组' ||
     g.name === '独立节点组'
   );
   if (customGrp) {
@@ -1296,15 +1293,15 @@ export function injectUnifiedToQuantumultX(
   const allNodeNames = qxSupportedNodes.map(n => n.name.replace(/[=,]/g, '_'));
 
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
-  const customTagName = customSources[0]?.name 
-    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+  const customTagName = customSources[0]?.name
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`)
     : '⚡️ 自建节点';
 
   // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
-  const customGrp = effectiveGroups.find(g => 
-    g.id === 'grp-src-custom' || 
-    g.name === customTagName || 
-    g.name === '⚡️ 独立节点组' || 
+  const customGrp = effectiveGroups.find(g =>
+    g.id === 'grp-src-custom' ||
+    g.name === customTagName ||
+    g.name === '⚡️ 独立节点组' ||
     g.name === '独立节点组'
   );
   if (customGrp) {
@@ -1390,11 +1387,11 @@ export function injectUnifiedToQuantumultX(
 
     // Dedicated custom node group
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    const isCustomGrp = grp.id === 'grp-src-custom' || 
-      cleanName === '自建节点' || 
-      cleanName === '独立节点组' || 
-      cleanName === 'custom' || 
-      cleanName === '手工自建' || 
+    const isCustomGrp = grp.id === 'grp-src-custom' ||
+      cleanName === '自建节点' ||
+      cleanName === '独立节点组' ||
+      cleanName === 'custom' ||
+      cleanName === '手工自建' ||
       customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
 
     if (isCustomGrp) {
@@ -1552,8 +1549,8 @@ export function injectUnifiedToEgern(
   const allNodeNames = nodes.map(n => n.name);
 
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
-  const customTagName = customSources[0]?.name 
-    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+  const customTagName = customSources[0]?.name
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`)
     : '⚡️ 自建节点';
 
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
@@ -1563,10 +1560,10 @@ export function injectUnifiedToEgern(
   }));
 
   // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
-  const customGrp = effectiveGroups.find(g => 
-    g.id === 'grp-src-custom' || 
-    g.name === customTagName || 
-    g.name === '⚡️ 独立节点组' || 
+  const customGrp = effectiveGroups.find(g =>
+    g.id === 'grp-src-custom' ||
+    g.name === customTagName ||
+    g.name === '⚡️ 独立节点组' ||
     g.name === '独立节点组'
   );
   if (customGrp) {
@@ -1649,11 +1646,11 @@ export function injectUnifiedToEgern(
     }
 
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    const isCustomGrp = grp.id === 'grp-src-custom' || 
-      cleanName === '自建节点' || 
-      cleanName === '独立节点组' || 
-      cleanName === 'custom' || 
-      cleanName === '手工自建' || 
+    const isCustomGrp = grp.id === 'grp-src-custom' ||
+      cleanName === '自建节点' ||
+      cleanName === '独立节点组' ||
+      cleanName === 'custom' ||
+      cleanName === '手工自建' ||
       customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
 
     if (isCustomGrp) {
@@ -1742,8 +1739,8 @@ export function injectUnifiedToShadowrocket(
   const localRules = activeRules.filter(r => r.kind === 'local');
 
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
-  const customTagName = customSources[0]?.name 
-    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`) 
+  const customTagName = customSources[0]?.name
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`)
     : '⚡️ 自建节点';
 
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
@@ -1753,10 +1750,10 @@ export function injectUnifiedToShadowrocket(
   }));
 
   // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
-  const customGrp = effectiveGroups.find(g => 
-    g.id === 'grp-src-custom' || 
-    g.name === customTagName || 
-    g.name === '⚡️ 独立节点组' || 
+  const customGrp = effectiveGroups.find(g =>
+    g.id === 'grp-src-custom' ||
+    g.name === customTagName ||
+    g.name === '⚡️ 独立节点组' ||
     g.name === '独立节点组'
   );
   if (customGrp) {
