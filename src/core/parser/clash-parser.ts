@@ -32,7 +32,7 @@ export function parseClashYaml(
         id: `clash-${sourceId || 'src'}-${idx}-${p.server || p.ip}-${p.port}`,
         name,
         type: nodeType,
-        server: String(p.server || ''),
+        server: String(p.server || '').trim().replace(/^\[(.*)\]$/, '$1'),
         port: Number(p.port || 0),
         sourceId,
         sourceName,

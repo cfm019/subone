@@ -90,10 +90,14 @@ export function parseNodeUri(uri: string, index: number = 0, countryPatterns?: C
   return null;
 }
 
+function cleanHost(h: string): string {
+  return (h || '').trim().replace(/^\[(.*)\]$/, '$1');
+}
+
 function parseVless(uri: string, index: number, countryPatterns?: CountryPatternRule[]): ProxyNode {
   const url = new URL(uri);
   const uuid = decodeURIComponent(url.username);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '443', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `VLESS-${server}-${port}`;
   const params = url.searchParams;
@@ -167,7 +171,7 @@ function parseVmess(uri: string, index: number, countryPatterns?: CountryPattern
     id: `node-${index}-${json.add}-${json.port}`,
     name,
     type: 'vmess',
-    server: json.add,
+    server: cleanHost(json.add),
     port: parseInt(json.port, 10),
     uuid: json.id,
     alterId: json.aid ? parseInt(json.aid, 10) : 0,
@@ -200,9 +204,9 @@ function parseShadowsocks(uri: string, index: number, countryPatterns?: CountryP
     const atIdx = urlPart.lastIndexOf('@');
     const userinfo = urlPart.slice(0, atIdx);
     const serverinfo = urlPart.slice(atIdx + 1);
-    const [s, p] = serverinfo.split(':');
-    server = s;
-    port = parseInt(p || '8388', 10);
+    const lastColon = serverinfo.lastIndexOf(':');
+    server = cleanHost(lastColon !== -1 ? serverinfo.slice(0, lastColon) : serverinfo);
+    port = parseInt((lastColon !== -1 ? serverinfo.slice(lastColon + 1) : '') || '8388', 10);
 
     const decodedUserinfo = decodeBase64Safe(userinfo);
     const target = decodedUserinfo.includes(':') ? decodedUserinfo : userinfo;
@@ -222,9 +226,9 @@ function parseShadowsocks(uri: string, index: number, countryPatterns?: CountryP
         method = userinfo.slice(0, colonIdx);
         password = userinfo.slice(colonIdx + 1);
       }
-      const [s, p] = serverinfo.split(':');
-      server = s;
-      port = parseInt(p || '8388', 10);
+      const lastColon = serverinfo.lastIndexOf(':');
+      server = cleanHost(lastColon !== -1 ? serverinfo.slice(0, lastColon) : serverinfo);
+      port = parseInt((lastColon !== -1 ? serverinfo.slice(lastColon + 1) : '') || '8388', 10);
     }
   }
 
@@ -245,7 +249,7 @@ function parseShadowsocks(uri: string, index: number, countryPatterns?: CountryP
 function parseTrojan(uri: string, index: number, countryPatterns?: CountryPatternRule[]): ProxyNode {
   const url = new URL(uri);
   const password = decodeURIComponent(url.username);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '443', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `Trojan-${server}-${port}`;
   const params = url.searchParams;
@@ -288,7 +292,7 @@ function parseTrojan(uri: string, index: number, countryPatterns?: CountryPatter
 function parseHysteria2(uri: string, index: number, countryPatterns?: CountryPatternRule[]): ProxyNode {
   const url = new URL(uri);
   const password = decodeURIComponent(url.username);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '443', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `Hy2-${server}-${port}`;
   const params = url.searchParams;
@@ -354,7 +358,7 @@ function parseTuic(uri: string, index: number, countryPatterns?: CountryPatternR
   const url = new URL(uri);
   const uuid = decodeURIComponent(url.username);
   const password = decodeURIComponent(url.password);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '443', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `TUIC-${server}-${port}`;
   const params = url.searchParams;
@@ -406,7 +410,7 @@ function parseWireguard(uri: string, index: number, countryPatterns?: CountryPat
   const normUri = uri.startsWith('wg://') ? 'wireguard://' + uri.slice(5) : uri;
   const url = new URL(normUri);
   const privateKey = decodeURIComponent(url.username);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '51820', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `WireGuard-${server}-${port}`;
   const params = url.searchParams;
@@ -473,7 +477,7 @@ function parseWireguard(uri: string, index: number, countryPatterns?: CountryPat
 
 function parseSnell(uri: string, index: number, countryPatterns?: CountryPatternRule[]): ProxyNode {
   const url = new URL(uri);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '443', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `Snell-${server}-${port}`;
   const params = url.searchParams;
@@ -504,7 +508,7 @@ function parseSnell(uri: string, index: number, countryPatterns?: CountryPattern
 function parseAnytls(uri: string, index: number, countryPatterns?: CountryPatternRule[]): ProxyNode {
   const url = new URL(uri);
   const password = decodeURIComponent(url.username);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '443', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `AnyTLS-${server}-${port}`;
   const params = url.searchParams;
@@ -553,7 +557,7 @@ function parseNaive(uri: string, index: number, countryPatterns?: CountryPattern
   const url = new URL(normUri);
   const username = decodeURIComponent(url.username);
   const password = decodeURIComponent(url.password);
-  const server = url.hostname;
+  const server = cleanHost(url.hostname);
   const port = parseInt(url.port || '443', 10);
   const name = decodeURIComponent(url.hash.slice(1)) || `Naive-${server}-${port}`;
   const params = url.searchParams;

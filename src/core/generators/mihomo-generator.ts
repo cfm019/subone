@@ -4,18 +4,45 @@ import { ProxyNode, ProxyGroupItem, UnifiedRuleItem, SubscriptionSource } from '
 import { injectUnifiedToMihomo } from './rule-injector.js';
 
 export function nodeToMihomoProxy(node: ProxyNode): any {
-  if (node.raw && node.raw.type) {
-    return {
+  // Only reuse raw if it is legitimately a Clash/Mihomo proxy object (not sing-box outbound, etc.)
+  if (
+    node.raw &&
+    typeof node.raw === 'object' &&
+    node.raw.type &&
+    node.raw.server &&
+    (node.raw.port || node.raw.ports) &&
+    !node.raw.server_port &&
+    !node.raw.tag
+  ) {
+    const rawCopy: any = {
       ...node.raw,
       name: node.name,
     };
+    if (typeof rawCopy.server === 'string') {
+      rawCopy.server = rawCopy.server.trim().replace(/^\[(.*)\]$/, '$1');
+    }
+    // Fix legacy or misconfigured reality field in raw if present
+    if (rawCopy.reality && !rawCopy['reality-opts']) {
+      rawCopy['reality-opts'] = {
+        'public-key': rawCopy.reality['public-key'] || rawCopy.reality.publicKey,
+        'short-id': rawCopy.reality['short-id'] || rawCopy.reality.shortId || '',
+      };
+      delete rawCopy.reality;
+    }
+    if (rawCopy.udp === undefined) {
+      rawCopy.udp = true;
+    }
+    return rawCopy;
   }
+
+  const cleanServer = (node.server || '').trim().replace(/^\[(.*)\]$/, '$1');
 
   const base: any = {
     name: node.name,
     type: node.type === 'ss' ? 'ss' : node.type,
-    server: node.server,
+    server: cleanServer,
     port: node.port,
+    udp: node.udp !== undefined ? Boolean(node.udp) : true,
   };
 
   if (node.type === 'ss') {
@@ -32,15 +59,15 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
   if (node.type === 'vless') {
     base.uuid = node.uuid;
     if (node.flow) base.flow = node.flow;
-    if (node.packetEncoding) base['packet-encoding'] = node.packetEncoding;
-    if (node.tls) {
+    base['packet-encoding'] = node.packetEncoding || 'xudp';
+    if (node.tls || (node.reality && node.reality.enabled)) {
       base.tls = true;
       if (node.sni) base.servername = node.sni;
       if (node.fingerprint) base['client-fingerprint'] = node.fingerprint;
       if (node.skipCertVerify) base['skip-cert-verify'] = true;
       if (node.alpn) base.alpn = node.alpn;
       if (node.reality && node.reality.enabled) {
-        base.reality = {
+        base['reality-opts'] = {
           'public-key': node.reality.publicKey,
           'short-id': node.reality.shortId || '',
         };

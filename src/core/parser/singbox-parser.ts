@@ -56,7 +56,7 @@ export function parseSingboxJson(
         id: `singbox-${sourceId || 'src'}-${idx}-${ob.server}-${ob.server_port}`,
         name,
         type: nodeType,
-        server: String(ob.server),
+        server: String(ob.server || '').trim().replace(/^\[(.*)\]$/, '$1'),
         port: Number(ob.server_port),
         sourceId,
         sourceName,
