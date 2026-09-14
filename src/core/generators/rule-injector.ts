@@ -959,7 +959,7 @@ export function injectUnifiedToLoon(
 
   // 2. Build [Remote Filter] (Regex / region filters for subscription nodes)
   const filterMap = new Map<string, string>();
-  if (!expandNodes) {
+  if (!expandNodes && networkSources.length > 0) {
     effectiveGroups.forEach(grp => {
       if (grp.filter) {
         const filterTag = getLoonFilterTag(grp);
@@ -1006,20 +1006,31 @@ export function injectUnifiedToLoon(
 
     // If group has filter (e.g. 🇭🇰 香港节点)
     if (grp.filter) {
+      const cleanFilter = grp.filter.trim().replace(/^\(\?i\)/i, '').replace(/\(\?i\)/gi, '');
+      let matched: string[] = [];
+      try {
+        const reg = new RegExp(cleanFilter, 'i');
+        matched = (expandNodes ? nodes : customNodes).filter(n => reg.test(n.name)).map(n => n.name.replace(/[=,]/g, '_'));
+      } catch {
+        matched = [];
+      }
+
       if (expandNodes) {
-        const cleanFilter = grp.filter.trim().replace(/^\(\?i\)/i, '').replace(/\(\?i\)/gi, '');
-        let matched: string[] = [];
-        try {
-          const reg = new RegExp(cleanFilter, 'i');
-          matched = nodes.filter(n => reg.test(n.name)).map(n => n.name.replace(/[=,]/g, '_'));
-        } catch {
-          matched = [];
-        }
         const members = matched.length > 0 ? matched : ['DIRECT'];
         groupLines.push(`${grp.name} = ${groupType}, ${members.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
       } else {
         const filterTag = getLoonFilterTag(grp);
-        groupLines.push(`${grp.name} = ${groupType}, ${filterTag}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
+        const members: string[] = [];
+        if (networkSources.length > 0) {
+          members.push(filterTag);
+        }
+        if (matched.length > 0) {
+          members.push(...matched);
+        }
+        if (members.length === 0) {
+          members.push('DIRECT');
+        }
+        groupLines.push(`${grp.name} = ${groupType}, ${members.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
       }
       return;
     }
@@ -1027,7 +1038,7 @@ export function injectUnifiedToLoon(
     if (grp.name === '♻️ 自动选择') {
       const members = expandNodes
         ? (allNodeNames.length > 0 ? allNodeNames : ['DIRECT'])
-        : ['全部节点', ...customNodeNames];
+        : (networkSources.length > 0 ? ['全部节点', ...customNodeNames] : (customNodeNames.length > 0 ? customNodeNames : ['DIRECT']));
       groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
       return;
     }
@@ -1035,7 +1046,7 @@ export function injectUnifiedToLoon(
     if (grp.name === '👉 手动选择') {
       const members = expandNodes
         ? (allNodeNames.length > 0 ? allNodeNames : ['DIRECT'])
-        : ['全部节点', ...customNodeNames];
+        : (networkSources.length > 0 ? ['全部节点', ...customNodeNames] : (customNodeNames.length > 0 ? customNodeNames : ['DIRECT']));
       groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
       return;
     }

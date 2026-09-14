@@ -1,13 +1,22 @@
 import { ProxyNode, ProxyGroupItem, UnifiedRuleItem } from '../../types/index.js';
 import { injectUnifiedToLoon } from './rule-injector.js';
 
+function formatServer(server: string): string {
+  const trimmed = (server || '').trim();
+  if (trimmed.includes(':') && !trimmed.startsWith('[')) {
+    return `[${trimmed}]`;
+  }
+  return trimmed;
+}
+
 export function nodeToLoonProxy(node: ProxyNode): string {
   const name = node.name.replace(/[=,]/g, '_');
+  const server = formatServer(node.server);
 
   if (node.type === 'ss') {
     const cipher = node.method || 'aes-128-gcm';
     const pwd = `"${node.password || ''}"`;
-    let line = `${name} = Shadowsocks,${node.server},${node.port},${cipher},${pwd}`;
+    let line = `${name} = Shadowsocks,${server},${node.port},${cipher},${pwd}`;
     if (node.plugin === 'obfs') {
       line += `,obfs=${node.pluginOpts?.mode || 'http'},obfs-host=${node.pluginOpts?.host || ''}`;
     } else if (node.plugin === 'v2ray-plugin') {
@@ -18,7 +27,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'anytls') {
-    let line = `${name} = AnyTLS,${node.server},${node.port},"${node.password || ''}"`;
+    let line = `${name} = AnyTLS,${server},${node.port},"${node.password || ''}"`;
     if (node.sni) line += `,sni=${node.sni}`;
     if (node.skipCertVerify) line += `,skip-cert-verify=true`;
     if (node.fingerprint) line += `,client-fingerprint=${node.fingerprint}`;
@@ -27,7 +36,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'hysteria2') {
-    let line = `${name} = Hysteria2,${node.server},${node.port},"${node.password || ''}"`;
+    let line = `${name} = Hysteria2,${server},${node.port},"${node.password || ''}"`;
     if (node.sni) line += `,sni=${node.sni}`;
     if (node.skipCertVerify) line += `,skip-cert-verify=true`;
     const obfsPwd = node.obfsPassword || (node.obfs && node.obfs !== 'salamander' ? node.obfs : undefined);
@@ -39,7 +48,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'vless') {
-    let line = `${name} = vless,${node.server},${node.port},"${node.uuid || ''}"`;
+    let line = `${name} = vless,${server},${node.port},"${node.uuid || ''}"`;
     const net = (node.network || 'tcp').toLowerCase();
 
     if (net === 'ws') {
@@ -56,25 +65,34 @@ export function nodeToLoonProxy(node: ProxyNode): string {
       if (node.h2Path) line += `,path=${node.h2Path}`;
       const host = node.h2Host || node.sni;
       if (host) line += `,host=${host}`;
-    } else if (net !== 'tcp') {
-      line += `,transport=${net}`;
+    } else {
+      line += `,transport=tcp`;
     }
 
-    if (node.tls) line += `,over-tls=true`;
+    if (node.tls || (node.reality && node.reality.enabled)) {
+      line += `,over-tls=true`;
+    }
     if (node.sni) line += `,tls-name=${node.sni}`;
     if (node.skipCertVerify) line += `,skip-cert-verify=true`;
     if (node.fingerprint) line += `,client-fingerprint=${node.fingerprint}`;
 
     if (node.reality && node.reality.enabled) {
-      line += `,reality=true,public-key=${node.reality.publicKey}`;
+      line += `,public-key="${node.reality.publicKey}"`;
       if (node.reality.shortId) line += `,short-id=${node.reality.shortId}`;
     }
+
+    if (node.flow?.includes('vision')) {
+      line += `,flow=xtls-rprx-vision`;
+    } else if (node.flow) {
+      line += `,flow=${node.flow}`;
+    }
+
     line += `,udp=true,block-quic=false`;
     return line;
   }
 
   if (node.type === 'trojan') {
-    let line = `${name} = trojan,${node.server},${node.port},"${node.password || ''}"`;
+    let line = `${name} = trojan,${server},${node.port},"${node.password || ''}"`;
     const net = (node.network || 'tcp').toLowerCase();
 
     if (net === 'ws') {
@@ -98,7 +116,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
 
   if (node.type === 'vmess') {
     const cipher = node.cipher || 'auto';
-    let line = `${name} = vmess,${node.server},${node.port},${cipher},"${node.uuid || ''}"`;
+    let line = `${name} = vmess,${server},${node.port},${cipher},"${node.uuid || ''}"`;
     const net = (node.network || 'tcp').toLowerCase();
 
     if (net === 'ws') {
@@ -121,7 +139,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'tuic') {
-    let line = `${name} = TUIC,${node.server},${node.port},"${node.uuid || ''}","${node.password || ''}"`;
+    let line = `${name} = TUIC,${server},${node.port},"${node.uuid || ''}","${node.password || ''}"`;
     if (node.sni) line += `,sni=${node.sni}`;
     if (node.skipCertVerify) line += `,skip-cert-verify=true`;
     if (node.congestionControl) line += `,congestion-controller=${node.congestionControl}`;
@@ -131,7 +149,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
 
   if (node.type === 'wireguard') {
     const selfIp = node.ip || (node.localAddress && node.localAddress[0] ? node.localAddress[0].split('/')[0] : '10.0.0.2');
-    let line = `${name} = WireGuard,${node.server},${node.port},private-key="${node.privateKey || ''}",peer-public-key="${node.publicKey || ''}",self-ip="${selfIp}"`;
+    let line = `${name} = WireGuard,${server},${node.port},private-key="${node.privateKey || ''}",peer-public-key="${node.publicKey || ''}",self-ip="${selfIp}"`;
     if (node.presharedKey) line += `,preshared-key="${node.presharedKey}"`;
     if (node.mtu) line += `,mtu=${node.mtu}`;
     return line;
@@ -140,7 +158,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   if (node.type === 'snell') {
     const psk = node.psk || node.password || '';
     const ver = node.snellVersion || 4;
-    let line = `${name} = snell,${node.server},${node.port},"${psk}",version=${ver}`;
+    let line = `${name} = snell,${server},${node.port},"${psk}",version=${ver}`;
     if (node.obfs) line += `,obfs=${node.obfs}`;
     if (node.obfsHost) line += `,obfs-host=${node.obfsHost}`;
     line += `,fast-open=false,udp=true`;
@@ -148,7 +166,7 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'socks5') {
-    let line = `${name} = SOCKS5,${node.server},${node.port}`;
+    let line = `${name} = SOCKS5,${server},${node.port}`;
     if (node.username || node.password) {
       line += `,"${node.username || ''}","${node.password || ''}"`;
     }
