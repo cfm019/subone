@@ -315,7 +315,15 @@ export function injectUnifiedToMihomo(
 
   const finalMatch = existingMatch || (availableGroupNames.has('🐟 漏网之鱼') ? 'MATCH,🐟 漏网之鱼' : `MATCH,${fallbackGroup}`);
 
-  doc.rules = [...existingPreRules, ...generatedRules, finalMatch];
+  const postRules = Array.isArray(doc.post_rules)
+    ? doc.post_rules
+    : Array.isArray(doc['post-rules'])
+    ? doc['post-rules']
+    : [];
+  delete doc.post_rules;
+  delete doc['post-rules'];
+
+  doc.rules = [...existingPreRules, ...generatedRules, ...postRules, finalMatch];
 
   return doc;
 }
@@ -849,7 +857,15 @@ export function injectUnifiedToSingbox(
     }
   });
 
-  doc.route.rules = [...baseRules, ...generatedRouteRules];
+  const postRules = Array.isArray(doc.route.post_rules)
+    ? [...doc.route.post_rules]
+    : Array.isArray(doc.route.postRules)
+    ? [...doc.route.postRules]
+    : [];
+  delete doc.route.post_rules;
+  delete doc.route.postRules;
+
+  doc.route.rules = [...baseRules, ...generatedRouteRules, ...postRules];
 
   if (!doc.route.final) {
     doc.route.final = fallbackGroup || '🐟 漏网之鱼';

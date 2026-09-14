@@ -201,6 +201,18 @@
         "outbound": "GLOBAL"
       }
     ],
+    "post_rules": [
+      {
+        "invert": true,
+        "port": [
+          80,
+          443,
+          8080,
+          8443
+        ],
+        "outbound": "💻 远程运维"
+      }
+    ],
     "rule_set": [],
     "final": "🐟 漏网之鱼"
   },
