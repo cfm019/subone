@@ -9,6 +9,10 @@ mode: rule
 log-level: info
 ipv6: true
 
+profile:
+  store-selected: true
+  store-fake-ip: true
+
 dns:
   enable: true
   listen: 127.0.0.1:1053
