@@ -209,9 +209,8 @@ export function injectUnifiedToMihomo(
         if (isCustomU) {
           if (validGroupNames.has(customTagName)) {
             combinedProxies.add(customTagName);
-          } else {
-            customNodeNames.forEach(name => combinedProxies.add(name));
           }
+          customNodeNames.forEach(name => combinedProxies.add(name));
         }
       });
 
@@ -1100,17 +1099,24 @@ export function injectUnifiedToLoon(
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+        const isCustom = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === '手工自建' || cleanU === 'custom' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
         if (expandNodes) {
           const matchedNodes = nodes.filter(n => {
             const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
             const sId = (n.sourceId || '').trim().toLowerCase();
-            const isCustom = sId === 'custom' || sId.startsWith('custom');
-            return sName === cleanU || sId === cleanU || (isCustom && (cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU)));
+            const nIsCustom = sId === 'custom' || sId.startsWith('custom');
+            return sName === cleanU || sId === cleanU || (nIsCustom && isCustom);
           }).map(n => n.name.replace(/[=,]/g, '_'));
           matchedNodes.forEach(m => {
-            if (!proxies.includes(m)) proxies.unshift(m);
+            if (!proxies.includes(m)) proxies.push(m);
           });
         } else {
+          // If custom nodes, they are already present locally in [Proxy], so expand them!
+          if (isCustom && customNodeNames.length > 0) {
+            customNodeNames.forEach(m => {
+              if (!proxies.includes(m)) proxies.push(m);
+            });
+          }
           const matched = sourceGroupTags.find(st => st.replace(/^[⚡️\s]+/, '').trim().toLowerCase() === cleanU);
           const tagToAdd = matched || (u.startsWith('⚡️') ? u : `⚡️ ${u}`);
           if (effectiveGroups.some(g => g.name === tagToAdd) && !proxies.includes(tagToAdd)) {
@@ -1439,13 +1445,12 @@ export function injectUnifiedToQuantumultX(
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
         const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
         if (isCustomU) {
-          if (expandNodes) {
-            customNodeNames.forEach(m => {
-              if (!proxies.includes(m)) proxies.push(m);
-            });
-          } else {
-            if (!proxies.includes(customTagName)) proxies.unshift(customTagName);
+          if (validGroupNames.has(customTagName) && !proxies.includes(customTagName)) {
+            proxies.unshift(customTagName);
           }
+          customNodeNames.forEach(m => {
+            if (!proxies.includes(m)) proxies.push(m);
+          });
         }
       });
     }
@@ -1699,13 +1704,12 @@ export function injectUnifiedToEgern(
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
         const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
         if (isCustomU) {
-          if (options?.expandNodes) {
-            customNodeNames.forEach(m => {
-              if (!proxies.includes(m)) proxies.push(m);
-            });
-          } else {
-            if (!proxies.includes(customTagName)) proxies.unshift(customTagName);
+          if (validGroupNames.has(customTagName) && !proxies.includes(customTagName)) {
+            proxies.unshift(customTagName);
           }
+          customNodeNames.forEach(m => {
+            if (!proxies.includes(m)) proxies.push(m);
+          });
         }
       });
     }
