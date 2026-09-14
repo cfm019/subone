@@ -75,6 +75,28 @@ is_singbox_running() {
     pidof "$bin_name" >/dev/null 2>&1 || pgrep -x "$bin_name" >/dev/null 2>&1 || pidof sing-box >/dev/null 2>&1
 }
 
+# 重载 / 重启服务 (优先通过 SIGHUP 实现热重载，避免 TUN 虚拟网卡被系统销毁造成断网)
+reload_singbox() {
+    if is_singbox_running; then
+        bin_name="$(basename "$SINGBOX_BIN")"
+        sb_pids="$(pidof "$bin_name" 2>/dev/null || pgrep -x "$bin_name" 2>/dev/null || pidof sing-box 2>/dev/null || true)"
+        if [ -n "$sb_pids" ]; then
+            log "ℹ️ 检测到 sing-box 正在运行 (PID: $sb_pids)，发送 SIGHUP 触发热重载..."
+            kill -HUP $sb_pids 2>/dev/null || true
+            sleep 1
+            if is_singbox_running; then
+                log "✅ 热重载完成 (保持原有进程与 TUN 虚拟网卡，避免整机断网)"
+                return 0
+            fi
+            log "⚠️ SIGHUP 重载后进程退出，尝试执行服务命令冷启动..."
+        fi
+    fi
+
+    log "ℹ️ 执行服务命令启动/重启: $RELOAD_CMD"
+    eval "$RELOAD_CMD" || true
+    sleep 2
+}
+
 # 订阅拉取函数 (最小依赖 + 智能直连 + 多重 DNS/网络容灾)
 fetch_subscription() {
     url="$1"
@@ -142,21 +164,18 @@ mkdir -p "$(dirname "$TARGET_CONF")"
 [ -f "$TARGET_CONF" ] && cp -f "$TARGET_CONF" "${TARGET_CONF}.bak"
 mv -f "$TMP_CONF" "$TARGET_CONF"
 
-# 5. 重启 sing-box
-log "3. 正在重启 sing-box 服务..."
-eval "$RELOAD_CMD" || true
+# 5. 重载/重启 sing-box
+log "3. 正在应用最新配置并重载 sing-box 服务..."
+reload_singbox
 
 # 6. 检测 sing-box 运行状态
 log "4. 检测 sing-box 运行状态..."
-sleep 2
-
 if ! is_singbox_running; then
     log "❌ 检测失败：sing-box 未能正常运行！"
     if [ -f "${TARGET_CONF}.bak" ]; then
         log "⚠️ 尝试回滚到上次的备份配置..."
         cp -f "${TARGET_CONF}.bak" "$TARGET_CONF"
-        eval "$RELOAD_CMD" || true
-        sleep 2
+        reload_singbox
         if is_singbox_running; then
             log "ℹ️ 已回滚并恢复运行旧配置。"
         else
