@@ -3,8 +3,9 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install backend dependencies
+# Install backend and frontend dependencies
 COPY package*.json ./
+COPY web/package*.json ./web/
 RUN npm install
 
 # Build backend
@@ -12,9 +13,7 @@ COPY tsconfig.json ./
 COPY src/ ./src/
 RUN npm run build:server
 
-# Install and build frontend
-COPY web/package*.json ./web/
-RUN cd web && npm install
+# Build frontend
 COPY web/ ./web/
 RUN npm run build:web
 
@@ -27,7 +26,7 @@ ENV PORT=3456
 
 # Install production dependencies only
 COPY package*.json ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --ignore-scripts
 
 # Copy build artifacts and templates
 COPY --from=builder /app/dist ./dist
