@@ -32,10 +32,13 @@ RUN npm install --omit=dev --ignore-scripts
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/web/dist ./web/dist
 COPY templates/ ./templates/
-
+COPY templates/ ./templates.default/
+COPY docker-entrypoint.sh ./
+RUN chmod +x docker-entrypoint.sh
 
 EXPOSE 3456
 
 VOLUME ["/app/data"]
 
+ENTRYPOINT ["/app/docker-entrypoint.sh"]
 CMD ["node", "dist/server/index.js"]
