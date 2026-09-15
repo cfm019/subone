@@ -3,18 +3,26 @@ import { injectUnifiedToSingbox } from './rule-injector.js';
 
 export function nodeToSingboxOutbound(node: ProxyNode): any {
   if (node.raw && node.raw.type && node.raw.tag) {
-    return {
+    const rawCopy = {
       ...node.raw,
       tag: node.name,
       _sourceName: node.sourceName,
       _sourceId: node.sourceId,
     };
+    if (rawCopy.server && typeof rawCopy.server === 'string') {
+      rawCopy.server = rawCopy.server.trim().replace(/^\[(.*)\]$/, '$1');
+    }
+    return rawCopy;
   }
+
+  const cleanServer = typeof node.server === 'string'
+    ? node.server.trim().replace(/^\[(.*)\]$/, '$1')
+    : node.server;
 
   const base: any = {
     tag: node.name,
     type: node.type === 'ss' ? 'shadowsocks' : node.type,
-    server: node.server,
+    server: cleanServer,
     server_port: node.port,
     _sourceName: node.sourceName,
     _sourceId: node.sourceId,
