@@ -4,13 +4,17 @@ export { isSupportedByQuantumultX };
 
 export function nodeToQuantumultXProxy(node: ProxyNode): string {
   const tag = node.name.replace(/[=,]/g, '_');
+  const cleanServer = (node.server || '').trim().replace(/^\[(.*)\]$/, '$1');
+  const serverWithPort = cleanServer.includes(':') && !cleanServer.startsWith('[')
+    ? `[${cleanServer}]:${node.port}`
+    : `${cleanServer}:${node.port}`;
 
   if (node.network === 'grpc') {
     return `# Unsupported on Quantumult X (gRPC transport is not supported by QX): ${tag}`;
   }
 
   if (node.type === 'anytls') {
-    let line = `anytls=${node.server}:${node.port}, password=${node.password || ''}, over-tls=true`;
+    let line = `anytls=${serverWithPort}, password=${node.password || ''}, over-tls=true`;
     if (node.sni) line += `, tls-host=${node.sni}`;
     if (node.reality?.enabled && node.reality.publicKey) {
       line += `, reality-base64-pubkey=${node.reality.publicKey}`;
@@ -24,14 +28,14 @@ export function nodeToQuantumultXProxy(node: ProxyNode): string {
 
   if (node.type === 'vless') {
     const method = 'none';
-    let line = `vless=${node.server}:${node.port}, method=${method}, password=${node.uuid || ''}`;
+    let line = `vless=${serverWithPort}, method=${method}, password=${node.uuid || ''}`;
     if (node.network === 'ws') {
-      const host = node.wsHeaders?.Host || node.wsHeaders?.host || node.sni || node.server;
+      const host = node.wsHeaders?.Host || node.wsHeaders?.host || node.sni || cleanServer;
       const obfsType = (node.tls || node.reality?.enabled) ? 'wss' : 'ws';
       line += `, obfs=${obfsType}, obfs-host=${host}, obfs-uri=${node.wsPath || '/'}`;
     } else {
       if (node.tls || node.reality?.enabled) {
-        line += `, obfs=over-tls, obfs-host=${node.sni || node.server}`;
+        line += `, obfs=over-tls, obfs-host=${node.sni || cleanServer}`;
       }
     }
 
@@ -52,9 +56,9 @@ export function nodeToQuantumultXProxy(node: ProxyNode): string {
 
   if (node.type === 'ss') {
     const method = node.method || 'aes-128-gcm';
-    let line = `shadowsocks=${node.server}:${node.port}, method=${method}, password=${node.password || ''}`;
+    let line = `shadowsocks=${serverWithPort}, method=${method}, password=${node.password || ''}`;
     if (node.reality?.enabled && node.reality.publicKey) {
-      line += `, obfs=over-tls, obfs-host=${node.sni || node.server}, reality-base64-pubkey=${node.reality.publicKey}`;
+      line += `, obfs=over-tls, obfs-host=${node.sni || cleanServer}, reality-base64-pubkey=${node.reality.publicKey}`;
       if (node.reality.shortId) {
         line += `, reality-hex-shortid=${node.reality.shortId}`;
       }
@@ -68,7 +72,7 @@ export function nodeToQuantumultXProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'trojan') {
-    let line = `trojan=${node.server}:${node.port}, password=${node.password || ''}`;
+    let line = `trojan=${serverWithPort}, password=${node.password || ''}`;
     if (node.network === 'ws') {
       const host = node.wsHeaders?.Host || node.wsHeaders?.host || node.sni;
       const obfsType = (node.tls || node.reality?.enabled) ? 'wss' : 'ws';
@@ -94,9 +98,9 @@ export function nodeToQuantumultXProxy(node: ProxyNode): string {
 
   if (node.type === 'vmess') {
     const method = (node.cipher === 'auto' || !node.cipher) ? 'none' : node.cipher;
-    let line = `vmess=${node.server}:${node.port}, method=${method}, password=${node.uuid || ''}`;
+    let line = `vmess=${serverWithPort}, method=${method}, password=${node.uuid || ''}`;
     if (node.reality?.enabled && node.reality.publicKey) {
-      line += `, obfs=over-tls, obfs-host=${node.sni || node.server}, reality-base64-pubkey=${node.reality.publicKey}`;
+      line += `, obfs=over-tls, obfs-host=${node.sni || cleanServer}, reality-base64-pubkey=${node.reality.publicKey}`;
       if (node.reality.shortId) {
         line += `, reality-hex-shortid=${node.reality.shortId}`;
       }
@@ -116,7 +120,7 @@ export function nodeToQuantumultXProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'socks5') {
-    let line = `socks5=${node.server}:${node.port}`;
+    let line = `socks5=${serverWithPort}`;
     if (node.username) line += `, username=${node.username}`;
     if (node.password) line += `, password=${node.password}`;
     if (node.tls) {
@@ -128,7 +132,7 @@ export function nodeToQuantumultXProxy(node: ProxyNode): string {
   }
 
   if (node.type === 'http') {
-    let line = `http=${node.server}:${node.port}`;
+    let line = `http=${serverWithPort}`;
     if (node.username) line += `, username=${node.username}`;
     if (node.password) line += `, password=${node.password}`;
     if (node.tls) {
