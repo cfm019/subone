@@ -1,5 +1,6 @@
 services:
   subone:
+    image: cfm019/subone:latest
     build: .
     container_name: subone
     restart: unless-stopped

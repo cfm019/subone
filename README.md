@@ -26,6 +26,24 @@ bash <(curl -fsSL https://raw.githubusercontent.com/cfm019/subone/main/install.s
   systemctl stop subone       # 停止服务
   ```
 
+### Docker 运行
+
+```bash
+docker run -d \
+  --name subone \
+  --restart unless-stopped \
+  -p 3456:3456 \
+  -v $(pwd)/data:/app/data \
+  -v $(pwd)/templates:/app/templates \
+  cfm019/subone:latest
+```
+
+或使用 Docker Compose：
+
+```bash
+docker compose up -d
+```
+
 ---
 
 ## 主要特性

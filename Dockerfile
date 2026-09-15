@@ -23,7 +23,7 @@ FROM node:22-alpine AS runner
 
 WORKDIR /app
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3456
 
 # Install production dependencies only
 COPY package*.json ./
@@ -35,7 +35,7 @@ COPY --from=builder /app/web/dist ./web/dist
 COPY templates/ ./templates/
 
 
-EXPOSE 3000
+EXPOSE 3456
 
 VOLUME ["/app/data"]
 
