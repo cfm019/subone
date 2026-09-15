@@ -342,8 +342,8 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                         className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${rule.kind === 'remote'
                           ? 'bg-[#EAF2EE] text-[#2D6A5A]'
                           : rule.type === 'SRC-IP-CIDR'
-                          ? 'bg-[#F0EBF8] text-[#6E42A8]'
-                          : 'bg-[#F0ECE4] text-[#59554E]'
+                            ? 'bg-[#F0EBF8] text-[#6E42A8]'
+                            : 'bg-[#F0ECE4] text-[#59554E]'
                           }`}
                       >
                         {rule.type}
@@ -420,7 +420,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
               <div>
                 <h3 className="text-base font-bold text-[#1F1E1D]">分流规则文本编辑</h3>
                 <p className="text-xs text-[#78746D]">
-                  以 Clash / YAML 格式编辑规则，支持 DOMAIN-SUFFIX、IP-CIDR、SRC-IP-CIDR (source_ip_cidr) 等，用注释 # 备注与目标去向
+                  以 Clash / YAML 格式编辑规则，支持 DOMAIN-SUFFIX、IP-CIDR、SRC-IP-CIDR 等，用注释 # 备注与目标去向
                 </p>
               </div>
               <button
@@ -514,7 +514,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                     <option value="DOMAIN-KEYWORD">DOMAIN-KEYWORD (域名关键字)</option>
                     <option value="DOMAIN">DOMAIN (完整域名)</option>
                     <option value="IP-CIDR">IP-CIDR (IP网段 / 单IP)</option>
-                    <option value="SRC-IP-CIDR">SRC-IP-CIDR (源IP网段 / source_ip_cidr)</option>
+                    <option value="SRC-IP-CIDR">SRC-IP-CIDR (源IP网段)</option>
                     <option value="GEOIP">GEOIP (地理位置IP)</option>
                   </select>
                 </div>
@@ -536,8 +536,8 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                     singleKind === 'remote'
                       ? 'https://raw.githubusercontent.com/.../reject.yaml'
                       : singleType === 'SRC-IP-CIDR'
-                      ? '例如局域网指定客户端IP或网段 (按源IP分流):\n192.168.1.50/32\n192.168.1.100/32\n192.168.2.0/24'
-                      : '例如私有运维节点:\n192.168.1.100/32\n10.0.0.0/24\nvps.example.com'
+                        ? '例如局域网指定客户端IP或网段 (按源IP分流):\n192.168.1.50/32\n192.168.1.100/32\n192.168.2.0/24'
+                        : '例如私有运维节点:\n192.168.1.100/32\n10.0.0.0/24\nvps.example.com'
                   }
                   value={singlePayload}
                   onChange={e => setSinglePayload(e.target.value)}
@@ -644,7 +644,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                     <option value="DOMAIN-KEYWORD">DOMAIN-KEYWORD (域名关键字)</option>
                     <option value="DOMAIN">DOMAIN (完整域名)</option>
                     <option value="IP-CIDR">IP-CIDR (IP网段 / 单IP)</option>
-                    <option value="SRC-IP-CIDR">SRC-IP-CIDR (源IP网段 / source_ip_cidr)</option>
+                    <option value="SRC-IP-CIDR">SRC-IP-CIDR (源IP网段)</option>
                     <option value="GEOIP">GEOIP (地理位置IP)</option>
                     <option value="FINAL">FINAL (漏网之鱼)</option>
                   </select>
@@ -667,8 +667,8 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                     editKind === 'remote'
                       ? 'https://raw.githubusercontent.com/.../reject.yaml'
                       : editType === 'SRC-IP-CIDR'
-                      ? '例如局域网指定客户端IP或网段 (按源IP分流):\n192.168.1.50/32\n192.168.1.100/32\n192.168.2.0/24'
-                      : '例如私有运维节点:\n192.168.1.100/32\n10.0.0.0/24\nvps.example.com'
+                        ? '例如局域网指定客户端IP或网段 (按源IP分流):\n192.168.1.50/32\n192.168.1.100/32\n192.168.2.0/24'
+                        : '例如私有运维节点:\n192.168.1.100/32\n10.0.0.0/24\nvps.example.com'
                   }
                   value={editPayload}
                   onChange={e => setEditPayload(e.target.value)}
