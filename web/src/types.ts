@@ -73,6 +73,7 @@ export type RuleType =
   | 'DOMAIN-KEYWORD'
   | 'DOMAIN'
   | 'IP-CIDR'
+  | 'SRC-IP-CIDR'
   | 'GEOIP'
   | 'RULE-SET'
   | 'FINAL'

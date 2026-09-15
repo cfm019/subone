@@ -30,6 +30,13 @@ export function resolveSafeOutbound(target: string, availableGroups: Set<string>
   return fallback;
 }
 
+export function formatCidr(ip: string): string {
+  const trimmed = (ip || '').trim();
+  if (!trimmed) return '';
+  if (trimmed.includes('/')) return trimmed;
+  return trimmed.includes(':') ? `${trimmed}/128` : `${trimmed}/32`;
+}
+
 export function injectUnifiedToMihomo(
   doc: any,
   nodes: ProxyNode[],
@@ -295,10 +302,21 @@ export function injectUnifiedToMihomo(
     } else if (r.payload.includes(',')) {
       r.payload.split(',').forEach(p => {
         const item = p.trim();
-        if (item) generatedRules.push(`${r.type},${item},${safeOutbound}`);
+        if (item) {
+          if (r.type === 'SRC-IP-CIDR') {
+            generatedRules.push(`SRC-IP-CIDR,${formatCidr(item)},${safeOutbound}`);
+          } else {
+            generatedRules.push(`${r.type},${item},${safeOutbound}`);
+          }
+        }
       });
     } else {
-      generatedRules.push(`${r.type},${r.payload},${safeOutbound}`);
+      const item = r.payload.trim();
+      if (r.type === 'SRC-IP-CIDR') {
+        generatedRules.push(`SRC-IP-CIDR,${formatCidr(item)},${safeOutbound}`);
+      } else {
+        generatedRules.push(`${r.type},${item},${safeOutbound}`);
+      }
     }
   });
 
@@ -834,6 +852,9 @@ export function injectUnifiedToSingbox(
       generatedRouteRules.push(isReject ? { domain: payloads, action: 'reject' } : { domain: payloads, outbound: safeOutbound });
     } else if (r.type === 'IP-CIDR') {
       generatedRouteRules.push(isReject ? { ip_cidr: payloads, action: 'reject' } : { ip_cidr: payloads, outbound: safeOutbound });
+    } else if (r.type === 'SRC-IP-CIDR') {
+      const formattedPayloads = payloads.map(formatCidr).filter(Boolean);
+      generatedRouteRules.push(isReject ? { source_ip_cidr: formattedPayloads, action: 'reject' } : { source_ip_cidr: formattedPayloads, outbound: safeOutbound });
     } else if (r.type === 'GEOIP') {
       generatedRouteRules.push(isReject ? { geoip: payloads, action: 'reject' } : { geoip: payloads, outbound: safeOutbound });
     }
@@ -1177,7 +1198,12 @@ export function injectUnifiedToLoon(
   const localRuleLines = localRules.flatMap(r => {
     const payloads = r.payload.split(/[,;\n]+/).map(p => p.trim()).filter(Boolean);
     const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
-    return payloads.map(p => `${r.type},${p},${safeOutbound}`);
+    return payloads.map(p => {
+      if (r.type === 'SRC-IP-CIDR') {
+        return `SRC-IP-CIDR,${formatCidr(p)},${safeOutbound}`;
+      }
+      return `${r.type},${p},${safeOutbound}`;
+    });
   });
 
   // 5. Build [Remote Rule]
@@ -1496,6 +1522,7 @@ export function injectUnifiedToQuantumultX(
     else if (r.type === 'DOMAIN-SUFFIX') qxRuleType = 'host-suffix';
     else if (r.type === 'DOMAIN-KEYWORD') qxRuleType = 'host-keyword';
     else if (r.type === 'IP-CIDR') qxRuleType = 'ip-cidr';
+    else if (r.type === 'SRC-IP-CIDR') qxRuleType = 'ip-cidr';
     else if (r.type === 'GEOIP') qxRuleType = 'geoip';
 
     localRuleLines.push(`${qxRuleType}, ${r.payload.trim()}, ${out}`);
@@ -1742,6 +1769,11 @@ export function injectUnifiedToEgern(
     } else if (r.kind === 'remote') {
       const adapted = adaptRulesetForEgern(r);
       outRules.push(`RULE-SET,${adapted.url},${target}`);
+    } else if (r.type === 'SRC-IP-CIDR') {
+      const payloads = r.payload.split(/[,;\n]+/).map(p => p.trim()).filter(Boolean);
+      payloads.forEach(p => {
+        outRules.push(`SRC-IP-CIDR,${formatCidr(p)},${target}`);
+      });
     } else {
       outRules.push(`${r.type},${r.payload.trim()},${target}`);
     }
@@ -1920,6 +1952,8 @@ export function injectUnifiedToShadowrocket(
     payloads.forEach(p => {
       if (r.type === 'IP-CIDR') {
         ruleLines.push(`IP-CIDR,${p},${safeOutbound},no-resolve`);
+      } else if (r.type === 'SRC-IP-CIDR') {
+        ruleLines.push(`SRC-IP-CIDR,${formatCidr(p)},${safeOutbound},no-resolve`);
       } else {
         ruleLines.push(`${r.type},${p},${safeOutbound}`);
       }

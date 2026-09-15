@@ -129,8 +129,9 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
 
     if (!formattedPayload) return;
 
+    const defaultPrefix = singleType === 'SRC-IP-CIDR' ? '源IP' : singleType;
     const newRuleData = {
-      name: singleName.trim() || `${singleType}: ${formattedPayload.slice(0, 30)}${formattedPayload.length > 30 ? '...' : ''}`,
+      name: singleName.trim() || `${defaultPrefix}: ${formattedPayload.slice(0, 30)}${formattedPayload.length > 30 ? '...' : ''}`,
       kind: singleKind,
       type: singleKind === 'remote' ? 'RULE-SET' : singleType,
       payload: formattedPayload,
@@ -173,8 +174,9 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
     if (!formattedPayload) return;
 
     const ruleId = editingRule.id;
+    const defaultPrefix = editType === 'SRC-IP-CIDR' ? '源IP' : editType;
     const updates = {
-      name: editName.trim() || `${editType}: ${formattedPayload.slice(0, 30)}`,
+      name: editName.trim() || `${defaultPrefix}: ${formattedPayload.slice(0, 30)}`,
       kind: editKind,
       type: editKind === 'remote' ? 'RULE-SET' : editType,
       payload: formattedPayload,
@@ -193,7 +195,12 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
       rule.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rule.payload.toLowerCase().includes(searchTerm.toLowerCase()) ||
       rule.outbound.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      rule.type.toLowerCase().includes(searchTerm.toLowerCase());
+      rule.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (rule.type === 'SRC-IP-CIDR' && (
+        'source_ip_cidr'.includes(searchTerm.toLowerCase()) ||
+        '源ip'.includes(searchTerm.toLowerCase()) ||
+        'src-ip'.includes(searchTerm.toLowerCase())
+      ));
 
     const matchesKind = kindFilter === 'all' || rule.kind === kindFilter;
     const matchesGroup = groupFilter === 'all' || rule.outbound === groupFilter;
@@ -334,6 +341,8 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                       <span
                         className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold ${rule.kind === 'remote'
                           ? 'bg-[#EAF2EE] text-[#2D6A5A]'
+                          : rule.type === 'SRC-IP-CIDR'
+                          ? 'bg-[#F0EBF8] text-[#6E42A8]'
                           : 'bg-[#F0ECE4] text-[#59554E]'
                           }`}
                       >
@@ -411,7 +420,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
               <div>
                 <h3 className="text-base font-bold text-[#1F1E1D]">分流规则文本编辑</h3>
                 <p className="text-xs text-[#78746D]">
-                  以 Clash / YAML 格式编辑规则，用注释 # 备注与目标去向
+                  以 Clash / YAML 格式编辑规则，支持 DOMAIN-SUFFIX、IP-CIDR、SRC-IP-CIDR (source_ip_cidr) 等，用注释 # 备注与目标去向
                 </p>
               </div>
               <button
@@ -505,6 +514,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                     <option value="DOMAIN-KEYWORD">DOMAIN-KEYWORD (域名关键字)</option>
                     <option value="DOMAIN">DOMAIN (完整域名)</option>
                     <option value="IP-CIDR">IP-CIDR (IP网段 / 单IP)</option>
+                    <option value="SRC-IP-CIDR">SRC-IP-CIDR (源IP网段 / source_ip_cidr)</option>
                     <option value="GEOIP">GEOIP (地理位置IP)</option>
                   </select>
                 </div>
@@ -525,6 +535,8 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                   placeholder={
                     singleKind === 'remote'
                       ? 'https://raw.githubusercontent.com/.../reject.yaml'
+                      : singleType === 'SRC-IP-CIDR'
+                      ? '例如局域网指定客户端IP或网段 (按源IP分流):\n192.168.1.50/32\n192.168.1.100/32\n192.168.2.0/24'
                       : '例如私有运维节点:\n192.168.1.100/32\n10.0.0.0/24\nvps.example.com'
                   }
                   value={singlePayload}
@@ -632,6 +644,7 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                     <option value="DOMAIN-KEYWORD">DOMAIN-KEYWORD (域名关键字)</option>
                     <option value="DOMAIN">DOMAIN (完整域名)</option>
                     <option value="IP-CIDR">IP-CIDR (IP网段 / 单IP)</option>
+                    <option value="SRC-IP-CIDR">SRC-IP-CIDR (源IP网段 / source_ip_cidr)</option>
                     <option value="GEOIP">GEOIP (地理位置IP)</option>
                     <option value="FINAL">FINAL (漏网之鱼)</option>
                   </select>
@@ -650,6 +663,13 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
                 <textarea
                   required
                   rows={editKind === 'remote' ? 2 : 4}
+                  placeholder={
+                    editKind === 'remote'
+                      ? 'https://raw.githubusercontent.com/.../reject.yaml'
+                      : editType === 'SRC-IP-CIDR'
+                      ? '例如局域网指定客户端IP或网段 (按源IP分流):\n192.168.1.50/32\n192.168.1.100/32\n192.168.2.0/24'
+                      : '例如私有运维节点:\n192.168.1.100/32\n10.0.0.0/24\nvps.example.com'
+                  }
                   value={editPayload}
                   onChange={e => setEditPayload(e.target.value)}
                   className="w-full px-3 py-2 bg-[#FAF8F5] border border-[#E8E4DC] rounded-xl font-mono text-xs text-[#1F1E1D] focus:outline-none focus:border-[#CC785C] resize-y leading-relaxed"

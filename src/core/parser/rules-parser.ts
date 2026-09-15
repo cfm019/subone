@@ -173,6 +173,19 @@ export function parseUnifiedRulesText(
               enabled: true,
             });
           }
+          const srcIpPayload = item.source_ip_cidr || item.src_ip_cidr || item.source_ip;
+          if (srcIpPayload) {
+            const payload = Array.isArray(srcIpPayload) ? srcIpPayload.join(', ') : String(srcIpPayload);
+            rules.push({
+              id: `r-json-src-ip-${Date.now()}-${idx}`,
+              name: `源IP: ${payload.slice(0, 30)}`,
+              kind: 'local',
+              type: 'SRC-IP-CIDR',
+              payload,
+              outbound,
+              enabled: true,
+            });
+          }
           if (item.geoip) {
             const payload = Array.isArray(item.geoip) ? item.geoip.join(', ') : String(item.geoip);
             rules.push({
@@ -294,6 +307,19 @@ export function parseUnifiedRulesText(
       if (firstToken.includes('DOMAIN-SUFFIX') || firstToken === 'DOMAIN-SUFFIX') type = 'DOMAIN-SUFFIX';
       else if (firstToken.includes('DOMAIN-KEYWORD') || firstToken === 'DOMAIN-KEYWORD') type = 'DOMAIN-KEYWORD';
       else if (firstToken === 'DOMAIN' || firstToken === 'HOST') type = 'DOMAIN';
+      else if (
+        firstToken === 'SRC-IP-CIDR' ||
+        firstToken === 'SOURCE-IP-CIDR' ||
+        firstToken === 'SRC-IP' ||
+        firstToken === 'SOURCE-IP' ||
+        firstToken === 'SOURCE_IP_CIDR' ||
+        firstToken === 'SRC_IP_CIDR' ||
+        firstToken.startsWith('SRC-IP') ||
+        firstToken.startsWith('SOURCE-IP') ||
+        firstToken.startsWith('SOURCE_IP')
+      ) {
+        type = 'SRC-IP-CIDR';
+      }
       else if (firstToken.includes('IP-CIDR') || firstToken === 'IP-CIDR' || firstToken === 'IP-CIDR6') type = 'IP-CIDR';
       else if (firstToken === 'GEOIP') type = 'GEOIP';
       else if (firstToken === 'FINAL' || firstToken === 'MATCH') type = 'FINAL';
@@ -350,7 +376,8 @@ export function parseUnifiedRulesText(
             ruleName = fileMatch ? fileMatch[1].toLowerCase() : `ruleset_${idx + 1}`;
           }
         } else {
-          ruleName = currentSection ? `${currentSection}` : `${type}: ${combinedPayload.slice(0, 30)}`;
+          const typePrefix = type === 'SRC-IP-CIDR' ? '源IP' : type;
+          ruleName = currentSection ? `${currentSection}` : `${typePrefix}: ${combinedPayload.slice(0, 30)}`;
         }
       }
 
@@ -388,7 +415,13 @@ export function aggregateRules(rules: UnifiedRuleItem[]): UnifiedRuleItem[] {
     // Aggregate local rules by (kind, remark/name, type, outbound, enabled)
     if (rule.kind === 'local' && rule.type !== 'FINAL') {
       const trimmedName = (rule.name || '').trim();
-      const isAutoName = !trimmedName || trimmedName.startsWith(rule.type + ':') || trimmedName.startsWith(rule.type + ' :');
+      const isAutoName =
+        !trimmedName ||
+        trimmedName.startsWith(rule.type + ':') ||
+        trimmedName.startsWith(rule.type + ' :') ||
+        (rule.type === 'SRC-IP-CIDR' && (trimmedName.startsWith('源IP:') || trimmedName.startsWith('源IP网段:'))) ||
+        (rule.type === 'IP-CIDR' && trimmedName.startsWith('IP网段:')) ||
+        (rule.type === 'DOMAIN-SUFFIX' && trimmedName.startsWith('域名后缀:'));
       
       const groupKey = !isAutoName
         ? `local::${rule.type}::${rule.outbound}::${rule.enabled}::${trimmedName}`
@@ -406,8 +439,9 @@ export function aggregateRules(rules: UnifiedRuleItem[]): UnifiedRuleItem[] {
           }
         }
         existing.payload = existingItems.join(', ');
-        if (isAutoName && existing.name.startsWith(existing.type + ':')) {
-          existing.name = `${existing.type}: ${existing.payload.slice(0, 30)}${existing.payload.length > 30 ? '...' : ''}`;
+        if (isAutoName) {
+          const prefix = existing.type === 'SRC-IP-CIDR' ? '源IP' : existing.type;
+          existing.name = `${prefix}: ${existing.payload.slice(0, 30)}${existing.payload.length > 30 ? '...' : ''}`;
         }
         continue;
       } else {
