@@ -184,7 +184,16 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
 
   if (node.type === 'hysteria2') {
     if (node.serverPorts && node.serverPorts.length > 0) {
-      base.server_ports = node.serverPorts;
+      const portsList = Array.isArray(node.serverPorts)
+        ? node.serverPorts
+        : String(node.serverPorts).split(',');
+      const formattedPorts = portsList
+        .map((s: any) => String(s).trim().replace(':', '-'))
+        .filter(Boolean);
+      if (formattedPorts.length > 0) {
+        base.server_ports = formattedPorts;
+        delete base.server_port;
+      }
     }
     if (node.hopInterval) {
       base.hop_interval = node.hopInterval;

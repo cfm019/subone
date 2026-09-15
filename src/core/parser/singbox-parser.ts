@@ -101,7 +101,11 @@ export function parseSingboxJson(
         maxEarlyData: ob.transport?.max_early_data,
         earlyDataHeaderName: ob.transport?.early_data_header_name,
 
-        serverPorts: ob.server_ports,
+        serverPorts: ob.server_ports
+          ? (Array.isArray(ob.server_ports) ? ob.server_ports.map(String) : String(ob.server_ports).split(','))
+              .map((s: string) => s.trim().replace(':', '-'))
+              .filter(Boolean)
+          : undefined,
         hopInterval: ob.hop_interval,
         hopIntervalMax: ob.hop_interval_max,
         upMbps: ob.up_mbps,

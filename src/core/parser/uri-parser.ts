@@ -305,7 +305,7 @@ function parseHysteria2(uri: string, index: number, countryPatterns?: CountryPat
   const mport = params.get('mport') || params.get('ports') || params.get('server_ports') || undefined;
   let serverPorts: string[] | undefined;
   if (mport) {
-    serverPorts = mport.split(',').map(s => s.trim().replace('-', ':')).filter(Boolean);
+    serverPorts = mport.split(',').map(s => s.trim().replace(':', '-')).filter(Boolean);
   }
 
   const hopInterval = params.get('hop_interval') || params.get('hop-interval') || undefined;
@@ -822,7 +822,7 @@ function parseV2rayN(uri: string, index: number, countryPatterns?: CountryPatter
     node.obfsPassword = extra.ObfsPassword || extra.obfsPassword || undefined;
     const mport = extra.Mport || extra.mport || extra.Ports || extra.ports;
     if (mport) {
-      node.serverPorts = String(mport).split(',').map(s => s.trim().replace('-', ':')).filter(Boolean);
+      node.serverPorts = String(mport).split(',').map(s => s.trim().replace(':', '-')).filter(Boolean);
     }
     node.hopInterval = extra.HopInterval || extra.hop_interval || '30s';
     node.hopIntervalMax = extra.HopIntervalMax || extra.hop_interval_max || '60s';

@@ -88,7 +88,7 @@ export function parseClashYaml(
         maxEarlyData: p['ws-opts']?.['max-early-data'],
         earlyDataHeaderName: p['ws-opts']?.['early-data-header-name'],
 
-        serverPorts: p.ports ? (Array.isArray(p.ports) ? p.ports.map(String) : String(p.ports).split(',').map(s => s.trim())) : undefined,
+        serverPorts: p.ports ? (Array.isArray(p.ports) ? p.ports.map(String) : String(p.ports).split(',')).map((s: string) => s.trim().replace(':', '-')).filter(Boolean) : undefined,
         hopInterval: p['hop-interval'] ? String(p['hop-interval']) : undefined,
         upMbps: p.up ? parseInt(String(p.up), 10) : undefined,
         downMbps: p.down ? parseInt(String(p.down), 10) : undefined,

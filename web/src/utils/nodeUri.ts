@@ -110,7 +110,11 @@ export function nodeToUri(node: any): string {
       params.set('obfs-password', obfsPwd);
     }
     if (node.serverPorts && node.serverPorts.length > 0) {
-      params.set('mport', node.serverPorts.join(','));
+      const ports = (Array.isArray(node.serverPorts) ? node.serverPorts : String(node.serverPorts).split(','))
+        .map((s: any) => String(s).trim().replace(':', '-'))
+        .filter(Boolean)
+        .join(',');
+      if (ports) params.set('mport', ports);
     }
     const qs = params.toString();
     return `hysteria2://${encodeURIComponent(node.password || '')}@${server}:${port}${qs ? '?' + qs : ''}#${name}`;

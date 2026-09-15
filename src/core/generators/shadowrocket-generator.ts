@@ -111,7 +111,13 @@ export function nodeToShadowrocketProxy(node: ProxyNode): string {
     if (obfsPwd) line += `, obfs=salamander, obfs-password="${obfsPwd}"`;
     if (node.downMbps) line += `, download-bandwidth=${node.downMbps}`;
     if (node.upMbps) line += `, upload-bandwidth=${node.upMbps}`;
-    if (node.serverPorts && node.serverPorts.length > 0) line += `, mport=${node.serverPorts.join(',')}`;
+    if (node.serverPorts && node.serverPorts.length > 0) {
+      const ports = (Array.isArray(node.serverPorts) ? node.serverPorts : String(node.serverPorts).split(','))
+        .map((s: any) => String(s).trim().replace(':', '-'))
+        .filter(Boolean)
+        .join(',');
+      if (ports) line += `, mport=${ports}`;
+    }
     line += `, udp=true`;
     return line;
   }
@@ -227,7 +233,11 @@ export function nodeToUri(node: ProxyNode): string | null {
       params.set('obfs-password', obfsPwd);
     }
     if (node.serverPorts && node.serverPorts.length > 0) {
-      params.set('mport', node.serverPorts.join(','));
+      const ports = (Array.isArray(node.serverPorts) ? node.serverPorts : String(node.serverPorts).split(','))
+        .map((s: any) => String(s).trim().replace(':', '-'))
+        .filter(Boolean)
+        .join(',');
+      if (ports) params.set('mport', ports);
     }
     const qs = params.toString();
     return `hysteria2://${encodeURIComponent(node.password || '')}@${node.server}:${node.port}${qs ? '?' + qs : ''}#${name}`;

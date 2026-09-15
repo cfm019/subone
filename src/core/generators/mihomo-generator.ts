@@ -170,7 +170,15 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
     base.tls = true;
     if (node.sni) base.sni = node.sni;
     if (node.serverPorts && node.serverPorts.length > 0) {
-      base.ports = node.serverPorts.join(',');
+      const portsList = Array.isArray(node.serverPorts)
+        ? node.serverPorts
+        : String(node.serverPorts).split(',');
+      const formattedPorts = portsList
+        .map((s: any) => String(s).trim().replace(':', '-'))
+        .filter(Boolean);
+      if (formattedPorts.length > 0) {
+        base.ports = formattedPorts.join(',');
+      }
     }
     if (node.hopInterval) base['hop-interval'] = node.hopInterval;
     if (node.upMbps) base.up = `${node.upMbps} Mbps`;
