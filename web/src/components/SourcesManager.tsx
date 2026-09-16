@@ -351,7 +351,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
             <h1 className="text-base font-bold text-[#1F1E1D]">订阅与节点</h1>
             <div className="flex items-center gap-1.5">
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FBF2EA] text-[#C45E38] font-semibold border border-[#F2D8C9]">
-                {customSources.length} 个自建组
+                {customSources.length} 个独立节点组
               </span>
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#EAF2EE] text-[#2D6A5A] font-semibold border border-[#D5E5DE]">
                 {networkSources.length} 个网络订阅
@@ -365,7 +365,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
             </div>
           </div>
           <p className="text-xs text-[#8C877D] mt-1">
-            统一管理网络订阅、自建节点组与规则派生分组
+            统一管理网络订阅、独立节点组与规则分组
           </p>
         </div>
 
@@ -393,10 +393,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
               setShowCreateGroupModal(true);
             }}
             className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
-            title="新建独立的自建节点分组"
+            title="新建独立的节点分组"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>新建自建组</span>
+            <span>新建独立节点组</span>
           </button>
 
           <button
@@ -467,7 +467,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                         </span>
                       ) : isCustom ? (
                         <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#FBF2EA] text-[#C45E38] border border-[#F2D8C9] shrink-0">
-                          ⭐ 自建组
+                          ⭐ 独立节点组
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#EAF2EE] text-[#2D6A5A] border border-[#D5E5DE] shrink-0">
@@ -509,7 +509,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                           )}
                         </div>
                       ) : isCustom ? (
-                        <span className="text-[#8C877D]">自建独立节点管理</span>
+                        <span className="text-[#8C877D]">独立节点管理</span>
                       ) : (
                         <span className="font-mono select-all text-[#8C877D]">{source.url}</span>
                       )}
@@ -602,7 +602,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                       {source.id !== 'custom' && (
                         <button
                           onClick={() => {
-                            if (confirm(`确定要删除自建节点组【${source.name}】及其包含的所有节点吗？`)) {
+                            if (confirm(`确定要删除独立节点组【${source.name}】及其包含的所有节点吗？`)) {
                               onDeleteSource(source.id);
                             }
                           }}
@@ -745,7 +745,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                             {isCustom && (
                               <button
                                 onClick={() => {
-                                  if (confirm(`确定要删除自建节点【${node.name}】吗？`)) {
+                                  if (confirm(`确定要删除节点【${node.name}】吗？`)) {
                                     onDeleteCustomNode(node.id);
                                   }
                                 }}
@@ -783,13 +783,13 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
         {unifiedSources.length === 0 && (
           <div className="p-12 rounded-2xl bg-white border border-dashed border-[#DFD9CF] text-center space-y-3">
             <Layers className="w-8 h-8 text-[#9E9A91] mx-auto opacity-50" />
-            <p className="text-xs font-medium text-[#78746D]">暂无任何订阅或自建节点组</p>
+            <p className="text-xs font-medium text-[#78746D]">暂无任何订阅或独立节点组</p>
             <div className="flex items-center justify-center gap-2">
               <button
                 onClick={() => handleOpenImportModal()}
                 className="px-3 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl"
               >
-                贴入自建节点
+                贴入独立节点
               </button>
               <button
                 onClick={() => setShowAddNetworkModal(true)}
@@ -885,7 +885,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
           <div className="bg-white rounded-2xl border border-[#E3DDD2] shadow-xl w-full max-w-xl p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-[#F0ECE4]">
               <div>
-                <h3 className="text-sm font-bold text-[#1F1E1D]">批量贴入自建节点</h3>
+                <h3 className="text-sm font-bold text-[#1F1E1D]">批量贴入独立节点</h3>
                 <p className="text-[11px] text-[#78746D]">
                   支持每行一个节点链接 (vless://, ss://, hy2://, trojan://, anytls://, wireguard://, snell://)，或 Clash YAML / Singbox JSON
                 </p>
@@ -902,7 +902,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
               {/* 目标节点组选择 */}
               <div>
                 <div className="flex items-center justify-between mb-1">
-                  <label className="text-xs font-semibold text-[#1F1E1D]">存入自建节点组</label>
+                  <label className="text-xs font-semibold text-[#1F1E1D]">存入独立节点组</label>
                   <button
                     type="button"
                     onClick={() => {
@@ -911,7 +911,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     }}
                     className="text-[11px] text-[#CC785C] hover:underline font-medium"
                   >
-                    + 新建自建组
+                    + 新建独立节点组
                   </button>
                 </div>
                 <select
@@ -978,7 +978,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-[#E3DDD2] shadow-xl w-full max-w-sm p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-[#F0ECE4]">
-              <h3 className="text-sm font-bold text-[#1F1E1D]">新建自建节点组</h3>
+              <h3 className="text-sm font-bold text-[#1F1E1D]">新建独立节点组</h3>
               <button
                 onClick={() => setShowCreateGroupModal(false)}
                 className="text-xs text-[#9E9A91] hover:text-[#1F1E1D]"
@@ -1171,19 +1171,16 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   required
                   value={filterNameInput}
                   onChange={e => setFilterNameInput(e.target.value)}
-                  placeholder="例如: 👥 朋友专线 / 🇭🇰 香港精选 / 📺 流媒体专线"
+                  placeholder="例如: 朋友专线"
                   className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#7C3AED]"
                 />
               </div>
 
               {/* 2. 节点来源 */}
               <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-xs font-semibold text-[#1F1E1D]">
-                    节点来源
-                  </label>
-                  <span className="text-[10px] text-[#8C877D]">选择从哪些来源中挑选节点</span>
-                </div>
+                <label className="block text-xs font-semibold text-[#1F1E1D] mb-1.5">
+                  节点来源
+                </label>
                 <div className="flex flex-wrap gap-1.5">
                   <button
                     type="button"
@@ -1238,31 +1235,9 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   type="text"
                   value={filterIncludeRegex}
                   onChange={e => setFilterIncludeRegex(e.target.value)}
-                  placeholder="例如: (香港 01|香港 02) 或 (HK|香港)；留空表示全选来源节点"
+                  placeholder="留空不过滤，支持正则如 (香港|HK)"
                   className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#7C3AED]"
                 />
-                <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                  <span className="text-[10px] text-[#8C877D]">快捷插入:</span>
-                  {['(香港|HK)', '(日本|JP)', '(美国|US)', '(新加坡|SG)', '(01|02)', '(专线|IPLC)'].map(quick => (
-                    <button
-                      key={quick}
-                      type="button"
-                      onClick={() => setFilterIncludeRegex(prev => prev ? `${prev}|${quick}` : quick)}
-                      className="px-1.5 py-0.5 text-[10px] rounded bg-[#EFEAE2] text-[#59554E] hover:bg-[#E5DFD5] transition-colors cursor-pointer"
-                    >
-                      {quick}
-                    </button>
-                  ))}
-                  {filterIncludeRegex && (
-                    <button
-                      type="button"
-                      onClick={() => setFilterIncludeRegex('')}
-                      className="px-1.5 py-0.5 text-[10px] rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors cursor-pointer ml-auto"
-                    >
-                      清空
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* 4. 排除正则 / 关键词 */}
@@ -1274,31 +1249,9 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   type="text"
                   value={filterExcludeRegex}
                   onChange={e => setFilterExcludeRegex(e.target.value)}
-                  placeholder="例如: (官网|到期|剩余|流量|测试)；留空表示不排除"
+                  placeholder="留空不排除，支持正则如 (官网|到期|流量)"
                   className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#7C3AED]"
                 />
-                <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                  <span className="text-[10px] text-[#8C877D]">快捷插入:</span>
-                  {['(官网|到期|剩余|流量)', '(测试|游戏|回国)', '(BGP|备用)'].map(quick => (
-                    <button
-                      key={quick}
-                      type="button"
-                      onClick={() => setFilterExcludeRegex(prev => prev ? `${prev}|${quick}` : quick)}
-                      className="px-1.5 py-0.5 text-[10px] rounded bg-[#EFEAE2] text-[#59554E] hover:bg-[#E5DFD5] transition-colors cursor-pointer"
-                    >
-                      {quick}
-                    </button>
-                  ))}
-                  {filterExcludeRegex && (
-                    <button
-                      type="button"
-                      onClick={() => setFilterExcludeRegex('')}
-                      className="px-1.5 py-0.5 text-[10px] rounded bg-red-50 text-red-600 hover:bg-red-100 transition-colors cursor-pointer ml-auto"
-                    >
-                      清空
-                    </button>
-                  )}
-                </div>
               </div>
 
               {/* 5. 实时匹配预览 */}
@@ -1306,9 +1259,6 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#1F1E1D]">
                     实时匹配预览 ({previewFilteredNodes.length} 个节点)
-                  </span>
-                  <span className="text-[10px] text-[#7C3AED] font-medium">
-                    动态跟随：后续新增节点若符合规则将自动纳入
                   </span>
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">
@@ -1325,7 +1275,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                         <div className="flex items-center gap-2 min-w-0">
                           <span>{n.countryEmoji || '🌐'}</span>
                           <span className="font-medium text-[#1F1E1D] truncate">{n.name}</span>
-                          <span className="text-[10px] text-[#8C877D] shrink-0">({n.sourceName || '自建'})</span>
+                          <span className="text-[10px] text-[#8C877D] shrink-0">({n.sourceName || '独立'})</span>
                         </div>
                         <span className="text-[10px] font-mono text-[#69655E] shrink-0">
                           {n.server}:{n.port}

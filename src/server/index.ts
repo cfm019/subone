@@ -247,9 +247,10 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
   const customSrc = config.sources?.find(s => s.id === 'custom' || s.type === 'custom');
   if (!customSrc) return false;
 
-  if (!config.proxyGroups) config.proxyGroups = [];
-
-  const srcName = (customSrc.name || '自建节点').trim();
+  if (customSrc.name === '自建节点') {
+    customSrc.name = '独立节点';
+  }
+  const srcName = (customSrc.name || '独立节点').trim();
   const targetTag = srcName.startsWith('⚡️') ? srcName : `⚡️ ${srcName}`;
 
   // Find any existing group associated with this custom source
@@ -258,6 +259,8 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
     g.id === `grp-src-${customSrc.id}` ||
     g.name === targetTag ||
     g.name === srcName ||
+    g.name === '⚡️ 自建节点' ||
+    g.name === '自建节点' ||
     g.name === '⚡️ 独立节点组' ||
     g.name === '独立节点组'
   );

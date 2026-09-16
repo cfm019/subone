@@ -20,7 +20,6 @@ import {
   Radio,
   FileCode,
   Tag,
-  Search,
   Download,
 } from 'lucide-react';
 import {
@@ -855,7 +854,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   onRefreshToken,
   loading,
 }) => {
-  const [groupSearchText, setGroupSearchText] = useState('');
   const [tokenCopied, setTokenCopied] = useState(false);
   const [tokenRefreshing, setTokenRefreshing] = useState(false);
   const [expandedGroupPreview, setExpandedGroupPreview] = useState<string | null>(null);
@@ -876,16 +874,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   const availableClients = useMemo(() => {
     return CLIENT_CONFIG_OPTIONS.filter(c => !profile.templates?.[c.type]);
   }, [profile.templates]);
-
-  const candidateSources = useMemo(() => {
-    if (!groupSearchText.trim()) return allAvailableSources;
-    const query = groupSearchText.toLowerCase();
-    return allAvailableSources.filter(s =>
-      s.name.toLowerCase().includes(query) ||
-      (s.filterConfig?.includeRegex || '').toLowerCase().includes(query) ||
-      (s.filterConfig?.excludeRegex || '').toLowerCase().includes(query)
-    );
-  }, [allAvailableSources, groupSearchText]);
 
   const totalEffectiveNodesInProfile = useMemo(() => {
     const map = new Map<string, any>();
@@ -1257,51 +1245,32 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
           {/* ================= TAB 2: NODE GROUPS SELECTION ================= */}
           {activeTab === 'nodes' && (
             <div className="space-y-4">
-              {/* 工具栏 */}
-              <div className="p-3.5 rounded-xl bg-white border border-[#E3DDD2] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                <div className="flex-1 min-w-[200px] relative">
-                  <Search className="w-3.5 h-3.5 text-[#8C877D] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
-                    placeholder="搜索节点分组名称或规则..."
-                    value={groupSearchText}
-                    onChange={e => setGroupSearchText(e.target.value)}
-                    className="w-full pl-8 pr-3 py-1.5 bg-[#FAF8F5] border border-[#E3DDD2] rounded-lg text-xs text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
-                  />
+              <div className="flex items-center justify-between p-3.5 rounded-xl bg-[#FAF8F5] border border-[#E8E4DC]">
+                <div className="text-xs text-[#3D3A37]">
+                  <span className="font-bold">节点分组：</span>
+                  勾选此订阅包含的节点分组。若留空则包含所有分组。
                 </div>
-
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={handleSelectAllSources}
-                    className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-[#FAF8F5] hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] transition-colors cursor-pointer"
+                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] cursor-pointer"
                   >
-                    全选分组
+                    全选
                   </button>
                   <button
                     type="button"
                     onClick={handleClearAllSources}
-                    className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-[#FAF8F5] hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] transition-colors cursor-pointer"
+                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-white hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] cursor-pointer"
                   >
-                    清空已选
+                    清空
                   </button>
-                </div>
-              </div>
-
-              {/* 统计提示条 */}
-              <div className="flex items-center justify-between px-1 text-xs text-[#69655E]">
-                <div>
-                  已选择 <span className="font-bold text-[#CC785C]">{selectedSourceSet.size}</span> 个节点分组，
-                  经去重后包含 <span className="font-bold text-[#1F1E1D]">{totalEffectiveNodesInProfile}</span> 个节点
-                </div>
-                <div className="text-[11px] text-[#8C877D] hidden sm:block">
-                  ✨ 组内节点新增或删减时，此订阅全自动同步更新
                 </div>
               </div>
 
               {/* 分组卡片网格展示区 */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-1">
-                {candidateSources.map(source => {
+                {allAvailableSources.map(source => {
                   const isChecked = selectedSourceSet.has(source.id);
                   const isCustom = source.type === 'custom' || source.id === 'custom';
                   const isFilter = source.type === 'filter';
@@ -1338,7 +1307,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                                 </span>
                               ) : isCustom ? (
                                 <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#FBF2EA] text-[#C45E38] border border-[#F2D8C9] shrink-0">
-                                  ⭐ 自建组
+                                  ⭐ 独立节点组
                                 </span>
                               ) : (
                                 <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#EAF2EE] text-[#2D6A5A] border border-[#D5E5DE] shrink-0">
@@ -1358,7 +1327,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                                   {source.filterConfig?.excludeRegex ? ` | 排除: ${source.filterConfig.excludeRegex}` : ''}
                                 </span>
                               ) : isCustom ? (
-                                <span>自建独立节点</span>
+                                <span>独立节点</span>
                               ) : (
                                 <span className="truncate">{source.url}</span>
                               )}

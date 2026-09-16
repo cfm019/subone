@@ -187,10 +187,16 @@ export function loadConfig(): AppConfig {
         ? parsed.countryRules
         : INITIAL_COUNTRY_RULES;
 
-      const sources: SubscriptionSource[] = Array.isArray(parsed.sources) ? parsed.sources : [];
       sources.forEach(s => {
-        if (s.id === 'custom' && !s.name) {
-          s.name = '自建节点';
+        if (s.id === 'custom' && (!s.name || s.name === '自建节点')) {
+          s.name = '独立节点';
+        }
+        if (s.type === 'custom' && s.nodes) {
+          s.nodes.forEach(n => {
+            if (!n.sourceName || n.sourceName === '自建节点') {
+              n.sourceName = s.name;
+            }
+          });
         }
       });
 
