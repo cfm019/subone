@@ -334,7 +334,7 @@ export function App() {
   };
 
   // Sources handlers
-  const handleAddSource = async (source: { name: string; url: string; type: string }) => {
+  const handleAddSource = async (source: { name: string; url?: string; type: string; filterConfig?: any }) => {
     try {
       setErrorMsg(null);
       const res = await apiFetch(`${API_BASE}/sources`, {
@@ -777,6 +777,7 @@ export function App() {
         {activeTab === 'sources' && (
           <SourcesManager
             sources={config?.sources || []}
+            nodes={nodes}
             onAddSource={handleAddSource}
             onAddCustomGroup={handleAddCustomGroup}
             onUpdateSource={handleUpdateSource}

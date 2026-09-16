@@ -335,30 +335,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Node count calculator for single profile
   const getProfileNodeCount = (prof: SubscriptionProfile): number => {
     const filter = prof.nodeFilter || { mode: 'all' };
-    if (filter.mode === 'manual') {
-      return (filter.selectedNodeIds || []).length;
+    const allSources = config?.sources || [];
+
+    if (Array.isArray(filter.sourceIds) && filter.sourceIds.length > 0) {
+      const set = new Set(filter.sourceIds);
+      const collectedMap = new Map<string, any>();
+      allSources.forEach(s => {
+        if (set.has(s.id) && s.enabled && s.nodes) {
+          s.nodes.forEach(n => collectedMap.set(n.id, n));
+        }
+      });
+      return collectedMap.size;
     }
 
-    let list = nodes;
-    if (filter.sourceIds && filter.sourceIds.length > 0) {
-      const set = new Set(filter.sourceIds);
-      list = list.filter(n => set.has(n.sourceId || 'custom'));
-    }
-    if (filter.countryCodes && filter.countryCodes.length > 0) {
-      const set = new Set(filter.countryCodes.map(c => c.toUpperCase()));
-      list = list.filter(n => n.countryCode && set.has(n.countryCode.toUpperCase()));
-    }
-    if (filter.includeKeywords && filter.includeKeywords.length > 0) {
-      list = list.filter(n => filter.includeKeywords!.some(kw => n.name.toLowerCase().includes(kw.toLowerCase())));
-    }
-    if (filter.excludeKeywords && filter.excludeKeywords.length > 0) {
-      list = list.filter(n => !filter.excludeKeywords!.some(kw => n.name.toLowerCase().includes(kw.toLowerCase())));
-    }
+    // Legacy fallback: if selectedNodeIds is explicitly set and sourceIds was not configured
     if (filter.selectedNodeIds && filter.selectedNodeIds.length > 0) {
       const selSet = new Set(filter.selectedNodeIds);
-      list = list.filter(n => selSet.has(n.id));
+      return nodes.filter(n => selSet.has(n.id)).length;
     }
-    return list.length;
+
+    return nodes.length;
   };
 
   const sourcesCount = config?.sources?.length || 0;
@@ -859,14 +855,19 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
   onRefreshToken,
   loading,
 }) => {
-  const [nodeSearchText, setNodeSearchText] = useState('');
-  const [filterCountry, setFilterCountry] = useState<string>('ALL');
-  const [filterSource, setFilterSource] = useState<string>('ALL');
+  const [groupSearchText, setGroupSearchText] = useState('');
   const [tokenCopied, setTokenCopied] = useState(false);
   const [tokenRefreshing, setTokenRefreshing] = useState(false);
+  const [expandedGroupPreview, setExpandedGroupPreview] = useState<string | null>(null);
 
-  const filter = profile.nodeFilter || { mode: 'all', selectedNodeIds: [] };
-  const selectedNodeSet = useMemo(() => new Set(filter.selectedNodeIds || []), [filter.selectedNodeIds]);
+  const allAvailableSources = useMemo(() => config?.sources || [], [config?.sources]);
+  const selectedSourceIds = profile.nodeFilter?.sourceIds;
+  const selectedSourceSet = useMemo(() => {
+    if (!selectedSourceIds) {
+      return new Set(allAvailableSources.map(s => s.id));
+    }
+    return new Set(selectedSourceIds);
+  }, [selectedSourceIds, allAvailableSources]);
 
   const customizedClients = useMemo(() => {
     return CLIENT_CONFIG_OPTIONS.filter(c => !!profile.templates?.[c.type]);
@@ -876,29 +877,35 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
     return CLIENT_CONFIG_OPTIONS.filter(c => !profile.templates?.[c.type]);
   }, [profile.templates]);
 
-  // Candidates based on search & country
-  const candidateNodes = useMemo(() => {
-    return nodes.filter(n => {
-      if (filterSource !== 'ALL' && (n.sourceId || 'custom') !== filterSource) {
-        return false;
-      }
-      if (filterCountry !== 'ALL' && (n.countryCode || '').toUpperCase() !== filterCountry) {
-        return false;
-      }
-      if (nodeSearchText.trim()) {
-        const query = nodeSearchText.toLowerCase();
-        return n.name.toLowerCase().includes(query) || (n.server || '').toLowerCase().includes(query);
-      }
-      return true;
-    });
-  }, [nodes, filterSource, filterCountry, nodeSearchText]);
+  const candidateSources = useMemo(() => {
+    if (!groupSearchText.trim()) return allAvailableSources;
+    const query = groupSearchText.toLowerCase();
+    return allAvailableSources.filter(s =>
+      s.name.toLowerCase().includes(query) ||
+      (s.filterConfig?.includeRegex || '').toLowerCase().includes(query) ||
+      (s.filterConfig?.excludeRegex || '').toLowerCase().includes(query)
+    );
+  }, [allAvailableSources, groupSearchText]);
 
-  const toggleNodeSelection = (nodeId: string) => {
-    const nextSet = new Set(selectedNodeSet);
-    if (nextSet.has(nodeId)) {
-      nextSet.delete(nodeId);
+  const totalEffectiveNodesInProfile = useMemo(() => {
+    const map = new Map<string, any>();
+    allAvailableSources.forEach(s => {
+      if (selectedSourceSet.has(s.id) && s.enabled && s.nodes) {
+        s.nodes.forEach(n => map.set(n.id, n));
+      }
+    });
+    if (selectedSourceSet.size === 0) {
+      return 0;
+    }
+    return map.size;
+  }, [allAvailableSources, selectedSourceSet]);
+
+  const toggleSourceSelection = (sourceId: string) => {
+    const nextSet = new Set(selectedSourceSet);
+    if (nextSet.has(sourceId)) {
+      nextSet.delete(sourceId);
     } else {
-      nextSet.add(nodeId);
+      nextSet.add(sourceId);
     }
     onChangeProfile(prev => {
       if (!prev) return prev;
@@ -906,71 +913,34 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         ...prev,
         nodeFilter: {
           ...prev.nodeFilter,
-          selectedNodeIds: Array.from(nextSet),
+          sourceIds: Array.from(nextSet),
         },
       };
     });
   };
 
-  const handleSelectAllCandidates = () => {
-    const nextSet = new Set(selectedNodeSet);
-    candidateNodes.forEach(n => nextSet.add(n.id));
+  const handleSelectAllSources = () => {
+    const allIds = allAvailableSources.map(s => s.id);
     onChangeProfile(prev => {
       if (!prev) return prev;
       return {
         ...prev,
         nodeFilter: {
           ...prev.nodeFilter,
-          selectedNodeIds: Array.from(nextSet),
+          sourceIds: allIds,
         },
       };
     });
   };
 
-  const handleDeselectAllCandidates = () => {
-    const nextSet = new Set(selectedNodeSet);
-    candidateNodes.forEach(n => nextSet.delete(n.id));
+  const handleClearAllSources = () => {
     onChangeProfile(prev => {
       if (!prev) return prev;
       return {
         ...prev,
         nodeFilter: {
           ...prev.nodeFilter,
-          selectedNodeIds: Array.from(nextSet),
-        },
-      };
-    });
-  };
-
-  const handleInvertCandidates = () => {
-    const nextSet = new Set(selectedNodeSet);
-    candidateNodes.forEach(n => {
-      if (nextSet.has(n.id)) {
-        nextSet.delete(n.id);
-      } else {
-        nextSet.add(n.id);
-      }
-    });
-    onChangeProfile(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        nodeFilter: {
-          ...prev.nodeFilter,
-          selectedNodeIds: Array.from(nextSet),
-        },
-      };
-    });
-  };
-
-  const handleClearAllSelected = () => {
-    onChangeProfile(prev => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        nodeFilter: {
-          ...prev.nodeFilter,
-          selectedNodeIds: [],
+          sourceIds: [],
         },
       };
     });
@@ -1063,7 +1033,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
               }`}
           >
             <Radio className="w-3.5 h-3.5" />
-            2. 选择节点 ({filter.selectedNodeIds?.length || 0})
+            2. 选择节点分组 ({selectedSourceSet.size}/{allAvailableSources.length})
           </button>
           <button
             onClick={() => setActiveTab('groups')}
@@ -1284,144 +1254,162 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
             </div>
           )}
 
-          {/* ================= TAB 2: NODES SELECTION ================= */}
+          {/* ================= TAB 2: NODE GROUPS SELECTION ================= */}
           {activeTab === 'nodes' && (
             <div className="space-y-4">
-
-              {/* 初筛工具栏 */}
-              <div className="p-3.5 rounded-xl bg-white border border-[#E3DDD2] space-y-3">
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-[#8C877D] font-medium shrink-0">来源:</span>
-                    <select
-                      value={filterSource}
-                      onChange={e => setFilterSource(e.target.value)}
-                      className="px-2.5 py-1.5 bg-[#FAF8F5] border border-[#E3DDD2] rounded-lg text-xs font-medium text-[#1F1E1D] focus:outline-none focus:border-[#CC785C] cursor-pointer"
-                    >
-                      <option value="ALL">全部订阅源</option>
-                      {(config?.sources || []).map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.nodes?.length || 0})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex-1 min-w-[200px] relative">
-                    <Search className="w-3.5 h-3.5 text-[#8C877D] absolute left-2.5 top-1/2 -translate-y-1/2" />
-                    <input
-                      type="text"
-                      placeholder="搜索节点名称、服务器地址..."
-                      value={nodeSearchText}
-                      onChange={e => setNodeSearchText(e.target.value)}
-                      className="w-full pl-8 pr-3 py-1.5 bg-[#FAF8F5] border border-[#E3DDD2] rounded-lg text-xs text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
-                    />
-                  </div>
+              {/* 工具栏 */}
+              <div className="p-3.5 rounded-xl bg-white border border-[#E3DDD2] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex-1 min-w-[200px] relative">
+                  <Search className="w-3.5 h-3.5 text-[#8C877D] absolute left-2.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    placeholder="搜索节点分组名称或规则..."
+                    value={groupSearchText}
+                    onChange={e => setGroupSearchText(e.target.value)}
+                    className="w-full pl-8 pr-3 py-1.5 bg-[#FAF8F5] border border-[#E3DDD2] rounded-lg text-xs text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
+                  />
                 </div>
 
-                {/* 国家快速选择胶囊条 */}
-                <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-[#ECE7DE]">
-                  <span className="text-xs text-[#8C877D] font-medium mr-1">国家/地区:</span>
-                  <button
-                    onClick={() => setFilterCountry('ALL')}
-                    className={`px-2 py-0.5 rounded-md text-xs font-medium transition-colors cursor-pointer ${filterCountry === 'ALL'
-                      ? 'bg-[#CC785C] text-white'
-                      : 'bg-[#FAF8F5] text-[#69655E] hover:bg-[#EFEAE2]'
-                      }`}
-                  >
-                    全部 ({nodes.length})
-                  </button>
-                  {availableCountries.map(c => (
-                    <button
-                      key={c.code}
-                      onClick={() => setFilterCountry(filterCountry === c.code ? 'ALL' : c.code)}
-                      className={`px-2 py-0.5 rounded-md text-xs font-medium transition-colors cursor-pointer flex items-center gap-1 ${filterCountry === c.code
-                        ? 'bg-[#CC785C] text-white'
-                        : 'bg-[#FAF8F5] text-[#69655E] hover:bg-[#EFEAE2]'
-                        }`}
-                    >
-                      <span>{c.emoji}</span>
-                      <span>{c.code}</span>
-                      <span className="text-[10px] opacity-75">({c.count})</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* 批量操作工具条 */}
-              <div className="flex items-center justify-between px-1">
-                <div className="text-xs text-[#69655E]">
-                  当前初筛匹配: <span className="font-semibold text-[#1F1E1D]">{candidateNodes.length}</span> 个节点
-                </div>
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-2 shrink-0">
                   <button
                     type="button"
-                    onClick={handleSelectAllCandidates}
-                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-[#FAF8F5] hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] transition-colors cursor-pointer"
+                    onClick={handleSelectAllSources}
+                    className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-[#FAF8F5] hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] transition-colors cursor-pointer"
                   >
-                    勾选本页全部
+                    全选分组
                   </button>
                   <button
                     type="button"
-                    onClick={handleDeselectAllCandidates}
-                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-[#FAF8F5] hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] transition-colors cursor-pointer"
-                  >
-                    取消本页全部
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleInvertCandidates}
-                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-[#FAF8F5] hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] transition-colors cursor-pointer"
-                  >
-                    反选
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleClearAllSelected}
-                    className="px-2.5 py-1 text-xs font-medium rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 transition-colors cursor-pointer ml-1"
+                    onClick={handleClearAllSources}
+                    className="px-2.5 py-1.5 text-xs font-medium rounded-lg bg-[#FAF8F5] hover:bg-[#EFEAE2] border border-[#E3DDD2] text-[#1F1E1D] transition-colors cursor-pointer"
                   >
                     清空已选
                   </button>
                 </div>
               </div>
 
-              {/* 节点网格展示区 */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pr-1">
-                {candidateNodes.map(node => {
-                  const isChecked = selectedNodeSet.has(node.id);
+              {/* 统计提示条 */}
+              <div className="flex items-center justify-between px-1 text-xs text-[#69655E]">
+                <div>
+                  已选择 <span className="font-bold text-[#CC785C]">{selectedSourceSet.size}</span> 个节点分组，
+                  经去重后包含 <span className="font-bold text-[#1F1E1D]">{totalEffectiveNodesInProfile}</span> 个节点
+                </div>
+                <div className="text-[11px] text-[#8C877D] hidden sm:block">
+                  ✨ 组内节点新增或删减时，此订阅全自动同步更新
+                </div>
+              </div>
+
+              {/* 分组卡片网格展示区 */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pr-1">
+                {candidateSources.map(source => {
+                  const isChecked = selectedSourceSet.has(source.id);
+                  const isCustom = source.type === 'custom' || source.id === 'custom';
+                  const isFilter = source.type === 'filter';
+                  const isPeeking = expandedGroupPreview === source.id;
+                  const nodesList = source.nodes || [];
+
                   return (
                     <div
-                      key={node.id}
-                      onClick={() => toggleNodeSelection(node.id)}
-                      className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-2.5 select-none ${isChecked
-                        ? 'border-[#CC785C] bg-[#FAF0EC]/60 shadow-2xs'
-                        : 'border-[#ECE7DE] bg-white hover:border-[#CC785C]/40 hover:bg-[#FAF8F5]'
-                        }`}
+                      key={source.id}
+                      className={`rounded-xl border transition-all duration-200 bg-white overflow-hidden ${
+                        isChecked
+                          ? 'border-[#CC785C] bg-[#FAF0EC]/40 shadow-2xs'
+                          : 'border-[#ECE7DE] hover:border-[#CC785C]/40 hover:bg-[#FAF8F5]'
+                      }`}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="shrink-0 text-[#CC785C]">
-                          {isChecked ? (
-                            <CheckSquare className="w-4 h-4 fill-[#FAF0EC]" />
-                          ) : (
-                            <Square className="w-4 h-4 text-[#C4BEB3]" />
-                          )}
+                      <div
+                        onClick={() => toggleSourceSelection(source.id)}
+                        className="p-3.5 flex items-start justify-between gap-3 cursor-pointer select-none"
+                      >
+                        <div className="flex items-start gap-3 min-w-0 flex-1">
+                          <div className="mt-0.5 shrink-0 text-[#CC785C]">
+                            {isChecked ? (
+                              <CheckSquare className="w-4 h-4 fill-[#FAF0EC]" />
+                            ) : (
+                              <Square className="w-4 h-4 text-[#C4BEB3]" />
+                            )}
+                          </div>
+
+                          <div className="min-w-0 flex-1 space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {isFilter ? (
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#F4EFFB] text-[#7C3AED] border border-[#E4D7F5] shrink-0">
+                                  ✨ 规则组
+                                </span>
+                              ) : isCustom ? (
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#FBF2EA] text-[#C45E38] border border-[#F2D8C9] shrink-0">
+                                  ⭐ 自建组
+                                </span>
+                              ) : (
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#EAF2EE] text-[#2D6A5A] border border-[#D5E5DE] shrink-0">
+                                  ✈️ 网络订阅
+                                </span>
+                              )}
+
+                              <span className="text-xs font-bold text-[#1F1E1D] truncate">
+                                {source.name}
+                              </span>
+                            </div>
+
+                            <div className="text-[11px] text-[#8C877D] truncate">
+                              {isFilter ? (
+                                <span>
+                                  {source.filterConfig?.includeRegex ? `包含: ${source.filterConfig.includeRegex}` : '全选来源'}
+                                  {source.filterConfig?.excludeRegex ? ` | 排除: ${source.filterConfig.excludeRegex}` : ''}
+                                </span>
+                              ) : isCustom ? (
+                                <span>自建独立节点</span>
+                              ) : (
+                                <span className="truncate">{source.url}</span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5">
-                            <span className="text-sm shrink-0">{node.countryEmoji || '🌐'}</span>
-                            <span className="text-xs font-medium text-[#1F1E1D] truncate">
-                              {node.name}
-                            </span>
-                          </div>
-                          <div className="text-[10px] text-[#8C877D] truncate mt-0.5">
-                            {node.sourceName || '独立节点'} • {node.server}:{node.port}
-                          </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded bg-[#FAF8F5] border border-[#ECE7DE] text-[#69655E]">
+                            {nodesList.length} 节点
+                          </span>
+
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setExpandedGroupPreview(prev => prev === source.id ? null : source.id);
+                            }}
+                            className="p-1 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
+                            title="快速预览组内节点"
+                          >
+                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isPeeking ? 'rotate-180 text-[#CC785C]' : ''}`} />
+                          </button>
                         </div>
                       </div>
 
-                      <span className="text-[10px] uppercase font-bold px-1.5 py-0.5 rounded bg-[#FAF8F5] border border-[#ECE7DE] text-[#69655E] shrink-0">
-                        {node.type}
-                      </span>
+                      {/* 组内节点极简抽屉预览 */}
+                      {isPeeking && (
+                        <div className="px-3.5 pb-3 pt-1 border-t border-[#ECE7DE]/60 bg-[#FAF8F5]/80 space-y-1.5 text-xs animate-in fade-in duration-150">
+                          <div className="text-[10px] text-[#8C877D] font-medium">
+                            组内包含节点列表 ({nodesList.length} 个):
+                          </div>
+                          <div className="max-h-32 overflow-y-auto space-y-1 pr-1">
+                            {nodesList.length === 0 ? (
+                              <div className="text-[11px] text-[#8C877D] py-1">当前组内无节点</div>
+                            ) : (
+                              nodesList.map(n => (
+                                <div key={n.id} className="flex items-center justify-between text-[11px] py-0.5">
+                                  <div className="flex items-center gap-1.5 truncate">
+                                    <span>{n.countryEmoji || '🌐'}</span>
+                                    <span className="text-[#1F1E1D] truncate">{n.name}</span>
+                                  </div>
+                                  <span className="text-[10px] font-mono text-[#8C877D] shrink-0 ml-2">
+                                    {n.server}:{n.port}
+                                  </span>
+                                </div>
+                              ))
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -1571,7 +1559,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
         {/* Modal Footer */}
         <div className="px-6 py-4 border-t border-[#E8E4DC] flex items-center justify-between bg-[#FAF8F5] shrink-0">
           <div className="text-xs text-[#8C877D]">
-            已选 {filter.selectedNodeIds?.length || 0} 个节点 • {profile.selectedGroupIds?.length || 0} 个策略组 • {profile.selectedRuleIds?.length || 0} 条规则
+            已选 {selectedSourceSet.size} 个分组 ({totalEffectiveNodesInProfile} 个节点) • {profile.selectedGroupIds?.length || 0} 个策略组 • {profile.selectedRuleIds?.length || 0} 条规则
           </div>
 
           <div className="flex items-center gap-2">

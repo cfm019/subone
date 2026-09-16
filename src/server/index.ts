@@ -174,19 +174,73 @@ function ensureCustomSource(config: AppConfig): SubscriptionSource {
   return customSrc;
 }
 
+export function computeFilterSourceNodes(
+  filterSource: SubscriptionSource,
+  availablePhysicalNodes: ProxyNode[]
+): ProxyNode[] {
+  const cfg = filterSource.filterConfig || {};
+  let candidates = availablePhysicalNodes;
+
+  // 1. Filter by parentSourceIds if specified
+  if (Array.isArray(cfg.parentSourceIds) && cfg.parentSourceIds.length > 0 && !cfg.parentSourceIds.includes('ALL')) {
+    const parentSet = new Set(cfg.parentSourceIds);
+    candidates = candidates.filter(n => parentSet.has(n.sourceId || 'custom'));
+  }
+
+  // 2. Include regex / keyword
+  if (cfg.includeRegex && cfg.includeRegex.trim()) {
+    try {
+      const reg = new RegExp(cfg.includeRegex.trim(), 'i');
+      candidates = candidates.filter(n => reg.test(n.name));
+    } catch (e: any) {
+      console.warn(`[FilterSource] Invalid includeRegex in source ${filterSource.name}:`, e.message);
+    }
+  }
+
+  // 3. Exclude regex / keyword
+  if (cfg.excludeRegex && cfg.excludeRegex.trim()) {
+    try {
+      const reg = new RegExp(cfg.excludeRegex.trim(), 'i');
+      candidates = candidates.filter(n => !reg.test(n.name));
+    } catch (e: any) {
+      console.warn(`[FilterSource] Invalid excludeRegex in source ${filterSource.name}:`, e.message);
+    }
+  }
+
+  return candidates;
+}
+
 function collectNodesFromSources(config: AppConfig): ProxyNode[] {
   ensureCustomSource(config);
-  const allNodes: ProxyNode[] = [];
+  const physicalNodes: ProxyNode[] = [];
+
+  // Pass 1: Collect all raw nodes from non-filter physical sources
   config.sources.forEach(s => {
-    if (s.enabled && s.nodes && s.nodes.length > 0) {
+    if (s.type !== 'filter' && s.enabled && s.nodes && s.nodes.length > 0) {
       s.nodes.forEach(n => {
         n.sourceName = s.name;
         n.sourceId = s.id;
       });
-      allNodes.push(...s.nodes);
+      physicalNodes.push(...s.nodes);
     }
   });
-  return allNodes;
+
+  // Pass 2: Recompute nodes for all filter sources
+  config.sources.forEach(s => {
+    if (s.type === 'filter') {
+      if (s.enabled) {
+        const derived = computeFilterSourceNodes(s, physicalNodes);
+        s.nodes = derived;
+        s.nodeCount = derived.length;
+        s.lastUpdated = new Date().toISOString();
+      } else {
+        s.nodes = [];
+        s.nodeCount = 0;
+      }
+    }
+  });
+
+  return physicalNodes;
 }
 
 function ensureCustomProxyGroup(config: AppConfig): boolean {
@@ -321,26 +375,39 @@ async function getEffectiveNodes(): Promise<ProxyNode[]> {
   return applyExtractionRules(globalNodesCache, appConfig.rules);
 }
 
-// Compute effective nodes for a specific profile (combining rules and manual selection)
-async function getEffectiveNodesForProfile(profile: SubscriptionProfile): Promise<ProxyNode[]> {
+export async function getEffectiveNodesForProfile(profile: SubscriptionProfile): Promise<ProxyNode[]> {
   const allNodes = await getEffectiveNodes();
   const filter = profile.nodeFilter || { mode: 'all' };
 
-  let filtered = allNodes;
+  let filtered: ProxyNode[] = [];
 
-  // 1. Source filter
+  // 1. Group / Source selection (Primary mode)
   if (Array.isArray(filter.sourceIds) && filter.sourceIds.length > 0) {
-    const srcSet = new Set(filter.sourceIds);
-    filtered = filtered.filter(n => srcSet.has(n.sourceId || 'custom'));
+    const selectedSourceIds = new Set(filter.sourceIds);
+    const collectedMap = new Map<string, ProxyNode>();
+    appConfig.sources.forEach(s => {
+      if (selectedSourceIds.has(s.id) && s.enabled && s.nodes) {
+        s.nodes.forEach(n => {
+          collectedMap.set(n.id, n);
+        });
+      }
+    });
+    filtered = Array.from(collectedMap.values());
+  } else {
+    // If no sourceIds specified, default to all available nodes
+    filtered = allNodes;
   }
 
-  // 2. Country filter
+  // 2. Global extraction rules apply
+  filtered = applyExtractionRules(filtered, appConfig.rules);
+
+  // 3. Optional Country filter (if specified in profile)
   if (Array.isArray(filter.countryCodes) && filter.countryCodes.length > 0) {
     const countrySet = new Set(filter.countryCodes.map(c => c.toUpperCase()));
     filtered = filtered.filter(n => n.countryCode && countrySet.has(n.countryCode.toUpperCase()));
   }
 
-  // 3. Keywords filter
+  // 4. Optional Keywords filter
   if (Array.isArray(filter.includeKeywords) && filter.includeKeywords.length > 0) {
     filtered = filtered.filter(n => filter.includeKeywords!.some(kw => n.name.toLowerCase().includes(kw.toLowerCase())));
   }
@@ -348,23 +415,26 @@ async function getEffectiveNodesForProfile(profile: SubscriptionProfile): Promis
     filtered = filtered.filter(n => !filter.excludeKeywords!.some(kw => n.name.toLowerCase().includes(kw.toLowerCase())));
   }
 
-  // 4. Regex filter
-  if (filter.includeRegex) {
+  // 5. Optional Regex filter
+  if (filter.includeRegex && filter.includeRegex.trim()) {
     try {
-      const reg = new RegExp(filter.includeRegex, 'i');
+      const reg = new RegExp(filter.includeRegex.trim(), 'i');
       filtered = filtered.filter(n => reg.test(n.name));
     } catch {}
   }
-  if (filter.excludeRegex) {
+  if (filter.excludeRegex && filter.excludeRegex.trim()) {
     try {
-      const reg = new RegExp(filter.excludeRegex, 'i');
+      const reg = new RegExp(filter.excludeRegex.trim(), 'i');
       filtered = filtered.filter(n => !reg.test(n.name));
     } catch {}
   }
 
-  // 5. Manual / selectedNodeIds filter:
-  // If user selected explicit nodes, only keep those
-  if (Array.isArray(filter.selectedNodeIds) && filter.selectedNodeIds.length > 0) {
+  // 6. Backward compatibility: if legacy selectedNodeIds is explicitly configured and sourceIds was not specified
+  if (
+    (!filter.sourceIds || filter.sourceIds.length === 0) &&
+    Array.isArray(filter.selectedNodeIds) &&
+    filter.selectedNodeIds.length > 0
+  ) {
     const selSet = new Set(filter.selectedNodeIds);
     filtered = filtered.filter(n => selSet.has(n.id));
   }
@@ -717,7 +787,30 @@ app.post('/api/sources', async (req, res) => {
       return res.json({ success: true, count: 0, data: newCustomSource });
     }
 
-    // 2. Create network subscription
+    // 2. Create rule/filter group if type is 'filter'
+    if (req.body.type === 'filter') {
+      const newFilterSource: SubscriptionSource = {
+        id: `filter-${Date.now()}`,
+        name: sourceName,
+        url: '',
+        enabled: req.body.enabled !== false,
+        type: 'filter',
+        filterConfig: {
+          parentSourceIds: Array.isArray(req.body.filterConfig?.parentSourceIds) ? req.body.filterConfig.parentSourceIds : [],
+          includeRegex: req.body.filterConfig?.includeRegex || '',
+          excludeRegex: req.body.filterConfig?.excludeRegex || '',
+        },
+        nodeCount: 0,
+        nodes: [],
+        lastUpdated: new Date().toISOString(),
+      };
+      appConfig.sources.push(newFilterSource);
+      globalNodesCache = collectNodesFromSources(appConfig);
+      saveConfig(appConfig);
+      return res.json({ success: true, count: newFilterSource.nodeCount, data: newFilterSource });
+    }
+
+    // 3. Create network subscription
     const sourceUrl = (req.body.url || '').trim();
     if (!sourceUrl) {
       return res.status(400).json({ success: false, message: '订阅链接不能为空' });
@@ -872,6 +965,11 @@ app.post('/api/sources/:id/refresh', async (req, res) => {
   const source = appConfig.sources.find(s => s.id === req.params.id);
   if (!source) {
     return res.status(404).json({ success: false, message: 'Source not found' });
+  }
+  if (source.type === 'filter') {
+    globalNodesCache = collectNodesFromSources(appConfig);
+    saveConfig(appConfig);
+    return res.json({ success: true, nodeCount: source.nodeCount, data: source.nodes });
   }
   try {
     const nodes = await fetchAndParseSource(source, appConfig.countryRules);
