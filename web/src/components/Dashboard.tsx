@@ -1302,7 +1302,7 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                           <div className="min-w-0 flex-1 space-y-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               {isFilter ? (
-                                <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#F4EFFB] text-[#7C3AED] border border-[#E4D7F5] shrink-0">
+                                <span className="px-1.5 py-0.2 text-[9px] font-bold rounded bg-[#F0ECE4] text-[#59554E] border border-[#DFD9CF] shrink-0">
                                   ✨ 规则组
                                 </span>
                               ) : isCustom ? (

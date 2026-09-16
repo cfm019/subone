@@ -247,10 +247,10 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
   const customSrc = config.sources?.find(s => s.id === 'custom' || s.type === 'custom');
   if (!customSrc) return false;
 
-  if (customSrc.name === '自建节点') {
-    customSrc.name = '独立节点';
+  if (customSrc.name === '自建节点' || customSrc.name === '独立节点') {
+    customSrc.name = '独立节点组';
   }
-  const srcName = (customSrc.name || '独立节点').trim();
+  const srcName = (customSrc.name || '独立节点组').trim();
   const targetTag = srcName.startsWith('⚡️') ? srcName : `⚡️ ${srcName}`;
 
   // Find any existing group associated with this custom source
@@ -276,11 +276,11 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
       changed = true;
     }
 
-    // Remove any stale duplicate groups (e.g. old "⚡️ 独立节点组" if targetTag is "⚡️ 自建节点")
+    // Remove any stale legacy duplicate groups (e.g. old "⚡️ 自建节点")
     const prevLen = config.proxyGroups.length;
     config.proxyGroups = config.proxyGroups.filter(g => {
       if (g === existingGroup) return true;
-      if (g.name === '⚡️ 独立节点组' || g.name === '独立节点组') return false;
+      if (g.name === '⚡️ 自建节点' || g.name === '自建节点') return false;
       return true;
     });
     if (config.proxyGroups.length !== prevLen) changed = true;
@@ -289,7 +289,7 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
     config.proxyGroups.forEach(grp => {
       if (grp !== existingGroup) {
         if (grp.use) {
-          const newUse = grp.use.map(u => (u === '独立节点组' || u === '⚡️ 独立节点组' || u === oldName ? srcName : u));
+          const newUse = grp.use.map(u => (u === '自建节点' || u === '⚡️ 自建节点' || u === '独立节点' || u === '⚡️ 独立节点' || u === oldName ? srcName : u));
           if (JSON.stringify(newUse) !== JSON.stringify(grp.use)) {
             grp.use = newUse;
             changed = true;

@@ -187,9 +187,10 @@ export function loadConfig(): AppConfig {
         ? parsed.countryRules
         : INITIAL_COUNTRY_RULES;
 
+      const sources: SubscriptionSource[] = Array.isArray(parsed.sources) ? parsed.sources : [];
       sources.forEach(s => {
-        if (s.id === 'custom' && (!s.name || s.name === '自建节点')) {
-          s.name = '独立节点';
+        if (s.id === 'custom' && (!s.name || s.name === '自建节点' || s.name === '独立节点组')) {
+          s.name = '独立节点组';
         }
         if (s.type === 'custom' && s.nodes) {
           s.nodes.forEach(n => {
@@ -229,7 +230,23 @@ export function loadConfig(): AppConfig {
 
       return config;
     } catch (err) {
-      console.error('Failed to parse data/subone_data.json, initializing defaults:', err);
+      console.error('Failed to parse data/subone_data.json:', err);
+      // Attempt recovery from backup if available
+      const BAK_FILE = `${DATA_CONFIG_FILE}.bak`;
+      if (fs.existsSync(BAK_FILE)) {
+        try {
+          console.log('[db] Attempting recovery from data/subone_data.json.bak...');
+          const bakData = fs.readFileSync(BAK_FILE, 'utf-8');
+          const parsed = JSON.parse(bakData);
+          if (Array.isArray(parsed.sources) && parsed.sources.length > 0) {
+            console.log(`[db] Successfully recovered ${parsed.sources.length} sources from backup.`);
+            fs.copyFileSync(BAK_FILE, DATA_CONFIG_FILE);
+            return loadConfig();
+          }
+        } catch (bakErr) {
+          console.error('[db] Failed recovery from .bak file:', bakErr);
+        }
+      }
     }
   }
 
@@ -275,6 +292,16 @@ export function saveConfig(config: AppConfig): void {
   try {
     if (!fs.existsSync(DATA_DIR)) {
       fs.mkdirSync(DATA_DIR, { recursive: true });
+    }
+
+    // Create a rotating backup of current data before overwriting
+    if (fs.existsSync(DATA_CONFIG_FILE)) {
+      try {
+        const stats = fs.statSync(DATA_CONFIG_FILE);
+        if (stats.size > 100) {
+          fs.copyFileSync(DATA_CONFIG_FILE, `${DATA_CONFIG_FILE}.bak`);
+        }
+      } catch {}
     }
 
     // Clone config to persist only app data in data/subone_data.json without server credentials

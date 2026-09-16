@@ -356,7 +356,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#EAF2EE] text-[#2D6A5A] font-semibold border border-[#D5E5DE]">
                 {networkSources.length} 个网络订阅
               </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#F4EFFB] text-[#7C3AED] font-semibold border border-[#E4D7F5]">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#EFEAE2] text-[#69655E] font-semibold border border-[#DFD9CF]">
                 {filterSources.length} 个规则组
               </span>
               <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#EFEAE2] text-[#69655E] font-mono font-semibold">
@@ -401,7 +401,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
           <button
             onClick={handleOpenCreateFilterGroup}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] rounded-xl shadow-2xs transition-all cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
             title="基于节点来源与规则生成派生节点分组"
           >
             <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -462,7 +462,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* 类型徽章 */}
                       {isFilter ? (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#F4EFFB] text-[#7C3AED] border border-[#E4D7F5] shrink-0">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#F0ECE4] text-[#59554E] border border-[#DFD9CF] shrink-0">
                           ✨ 规则组
                         </span>
                       ) : isCustom ? (
@@ -534,7 +534,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     <>
                       <button
                         onClick={() => handleOpenEditFilterGroup(source)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#7C3AED] bg-[#7C3AED]/10 hover:bg-[#7C3AED]/20 rounded-lg transition-colors cursor-pointer"
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#69655E] bg-[#EFEAE2] hover:bg-[#E5DFD5] rounded-lg transition-colors cursor-pointer"
                         title="编辑此规则组配置"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -544,10 +544,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                       <button
                         onClick={() => handleSingleRefresh(source.id)}
                         disabled={isThisRefreshing}
-                        className="p-1.5 text-[#8C877D] hover:text-[#7C3AED] hover:bg-[#F4EFFB] rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer"
                         title="重新匹配此规则组节点"
                       >
-                        <RefreshCw className={`w-3.5 h-3.5 ${isThisRefreshing ? 'animate-spin text-[#7C3AED]' : ''}`} />
+                        <RefreshCw className={`w-3.5 h-3.5 ${isThisRefreshing ? 'animate-spin text-[#CC785C]' : ''}`} />
                       </button>
 
                       <button
@@ -1147,7 +1147,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
           <div className="bg-[#FAF8F5] border border-[#E3DDD2] rounded-2xl p-5 max-w-xl w-full shadow-2xl space-y-4 max-h-[90vh] flex flex-col overflow-hidden">
             <div className="flex items-center justify-between pb-3 border-b border-[#E8E2D8] shrink-0">
               <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-[#7C3AED]" />
+                <Sparkles className="w-4 h-4 text-[#8C877D]" />
                 <h3 className="text-sm font-bold text-[#1F1E1D]">
                   {editingFilterSource ? '编辑规则分组' : '新建规则分组'}
                 </h3>
@@ -1172,7 +1172,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   value={filterNameInput}
                   onChange={e => setFilterNameInput(e.target.value)}
                   placeholder="例如: 朋友专线"
-                  className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#7C3AED]"
+                  className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
                 />
               </div>
 
@@ -1187,7 +1187,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     onClick={() => setFilterParentSources(['ALL'])}
                     className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
                       filterParentSources.includes('ALL') || filterParentSources.length === 0
-                        ? 'bg-[#7C3AED] text-white shadow-2xs'
+                        ? 'bg-[#CC785C] text-white shadow-2xs'
                         : 'bg-white border border-[#E3DDD2] text-[#69655E] hover:bg-[#EFEAE2]'
                     }`}
                   >
@@ -1213,7 +1213,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                         }}
                         className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
                           isSelected
-                            ? 'bg-[#7C3AED] text-white shadow-2xs'
+                            ? 'bg-[#CC785C] text-white shadow-2xs'
                             : 'bg-white border border-[#E3DDD2] text-[#69655E] hover:bg-[#EFEAE2]'
                         }`}
                       >
@@ -1236,7 +1236,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   value={filterIncludeRegex}
                   onChange={e => setFilterIncludeRegex(e.target.value)}
                   placeholder="留空不过滤，支持正则如 (香港|HK)"
-                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#7C3AED]"
+                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
                 />
               </div>
 
@@ -1250,7 +1250,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   value={filterExcludeRegex}
                   onChange={e => setFilterExcludeRegex(e.target.value)}
                   placeholder="留空不排除，支持正则如 (官网|到期|流量)"
-                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#7C3AED]"
+                  className="w-full px-3 py-2 text-xs font-mono bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
                 />
               </div>
 
@@ -1298,7 +1298,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 <button
                   type="submit"
                   disabled={isSubmitting || !filterNameInput.trim()}
-                  className="px-4 py-1.5 text-xs font-semibold text-white bg-[#7C3AED] hover:bg-[#6D28D9] rounded-xl disabled:opacity-50 transition-all shadow-xs cursor-pointer"
+                  className="px-4 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl disabled:opacity-50 transition-all shadow-xs cursor-pointer"
                 >
                   {isSubmitting ? '保存中...' : '保存规则分组'}
                 </button>
