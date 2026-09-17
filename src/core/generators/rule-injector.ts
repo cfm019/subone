@@ -1204,22 +1204,6 @@ export function injectUnifiedToLoon(
     }
   });
 
-  // Ensure dedicated source groups exist if not yet added
-  networkSources.forEach(s => {
-    const sTag = s.name.replace(/[=,]/g, '_').trim();
-    const grpTag = sTag.startsWith('⚡️') ? sTag : `⚡️ ${sTag}`;
-    if (!existingGroupNames.has(grpTag.toLowerCase()) && !existingGroupNames.has(sTag.toLowerCase())) {
-      if (expandNodes) {
-        const srcNodes = nodes
-          .filter(n => n.sourceName === s.name || n.sourceId === s.id)
-          .map(n => n.name.replace(/[=,]/g, '_'));
-        const members = srcNodes.length > 0 ? srcNodes : ['DIRECT'];
-        groupLines.push(`${grpTag} = url-test, ${members.join(', ')}, url=https://www.google.com/generate_204, interval=300, tolerance=50`);
-      } else {
-        groupLines.push(`${grpTag} = url-test, ${sTag}, url=https://www.google.com/generate_204, interval=300, tolerance=50`);
-      }
-    }
-  });
 
   if (customNodes.length > 0 && !effectiveGroups.some(g => g.id === 'grp-src-custom' || g.name.includes('自建') || g.name.includes('独立'))) {
     const customTagName = customSources[0]?.name ? `⚡️ ${customSources[0].name}` : '⚡️ 自建节点';
