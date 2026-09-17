@@ -1186,7 +1186,36 @@ app.post('/api/groups/generate-country-presets', (req, res) => {
 app.put('/api/groups/:id', (req, res) => {
   const idx = appConfig.proxyGroups.findIndex(g => g.id === req.params.id);
   if (idx === -1) return res.status(404).json({ success: false, message: 'Group not found' });
-  appConfig.proxyGroups[idx] = { ...appConfig.proxyGroups[idx], ...req.body };
+  
+  const current = appConfig.proxyGroups[idx];
+  const updated = { ...current, ...req.body };
+
+  // Explicitly handle clearing fields if provided
+  if ('proxies' in req.body) {
+    if (Array.isArray(req.body.proxies) && req.body.proxies.length > 0) {
+      updated.proxies = req.body.proxies;
+    } else {
+      delete updated.proxies;
+    }
+  }
+
+  if ('use' in req.body) {
+    if (Array.isArray(req.body.use) && req.body.use.length > 0) {
+      updated.use = req.body.use;
+    } else {
+      delete updated.use;
+    }
+  }
+
+  if ('filter' in req.body) {
+    if (typeof req.body.filter === 'string' && req.body.filter.trim()) {
+      updated.filter = req.body.filter.trim();
+    } else {
+      delete updated.filter;
+    }
+  }
+
+  appConfig.proxyGroups[idx] = updated;
   saveConfig(appConfig);
   res.json({ success: true, data: appConfig.proxyGroups[idx] });
 });

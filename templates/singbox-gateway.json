@@ -182,12 +182,6 @@
         "outbound": "🎯 本地直连"
       },
       {
-        "port": [
-          22
-        ],
-        "outbound": "💻 远程运维"
-      },
-      {
         "type": "logical",
         "mode": "or",
         "rules": [

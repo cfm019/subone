@@ -176,9 +176,9 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     const payload = {
       ...formData,
       name: formData.name.trim(),
-      proxies: formData.proxies && formData.proxies.length > 0 ? formData.proxies : undefined,
-      use: formData.use && formData.use.length > 0 ? formData.use : undefined,
-      filter: formData.filter?.trim() || undefined,
+      proxies: formData.proxies || [],
+      use: formData.use || [],
+      filter: formData.filter?.trim() || '',
     };
 
     if (editingGroup) {
@@ -189,6 +189,21 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
       setIsAdding(false);
       await onAddGroup(payload);
     }
+  };
+
+  const isProxyValid = (proxyName: string): boolean => {
+    if (allCandidateOutbounds.includes(proxyName)) return true;
+    const clean = proxyName.trim().toLowerCase();
+    if (['direct', 'reject', 'pass', 'compatible', 'global', '🎯 本地直连'].includes(clean)) return true;
+    return nodes.some(n => n.name.trim().toLowerCase() === clean);
+  };
+
+  const handleCleanInvalidProxies = () => {
+    const current = formData.proxies || [];
+    setFormData({
+      ...formData,
+      proxies: current.filter(isProxyValid),
+    });
   };
 
   const handleToggleProxy = (proxyName: string) => {
@@ -611,27 +626,57 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                     <Layers className="w-3.5 h-3.5 text-[#CC785C]" />
                     <span>包含的出站策略组 / 选项 (Proxies)</span>
                   </label>
-                  <span className="text-[10px] text-[#78746D]">
-                    已选 {(formData.proxies || []).length} 项
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {(() => {
+                      const invalidCount = (formData.proxies || []).filter(p => !isProxyValid(p)).length;
+                      if (invalidCount === 0) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={handleCleanInvalidProxies}
+                          className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold bg-[#FDF2F2] text-[#E02424] border border-[#FBD5D5] rounded-md hover:bg-[#FDE8E8] transition-all cursor-pointer shadow-2xs"
+                          title="一键移除所有在当前节点与策略组中已不存在的残留项"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          <span>一键清理 {invalidCount} 个失效项</span>
+                        </button>
+                      );
+                    })()}
+                    <span className="text-[10px] text-[#78746D]">
+                      已选 {(formData.proxies || []).length} 项
+                    </span>
+                  </div>
                 </div>
 
                 <div className="flex flex-wrap gap-1.5 min-h-[32px] p-2 bg-white rounded-lg border border-[#E3DDD2]">
-                  {(formData.proxies || []).map((p, idx) => (
-                    <span
-                      key={idx}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#FAF0EC] text-[#B85D3F] border border-[#F3DDD3] rounded-md font-medium text-xs"
-                    >
-                      <span>{p}</span>
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveProxy(p)}
-                        className="text-[#B85D3F] hover:text-[#94381C] p-0.5 cursor-pointer"
+                  {(formData.proxies || []).map((p, idx) => {
+                    const valid = isProxyValid(p);
+                    return (
+                      <span
+                        key={idx}
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-xs border ${
+                          valid
+                            ? 'bg-[#FAF0EC] text-[#B85D3F] border-[#F3DDD3]'
+                            : 'bg-[#FDF2F2] text-[#E02424] border-[#FBD5D5] ring-1 ring-[#E02424]/20'
+                        }`}
+                        title={valid ? undefined : '该节点在订阅与自建源中已不存在，保存或点击清理即可移除'}
                       >
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
+                        <span>{p}</span>
+                        {!valid && (
+                          <span className="text-[9px] px-1 bg-[#FDE8E8] text-[#9B1C1C] rounded font-bold">
+                            已失效
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProxy(p)}
+                          className={`${valid ? 'text-[#B85D3F] hover:text-[#94381C]' : 'text-[#E02424] hover:text-[#9B1C1C]'} p-0.5 cursor-pointer`}
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    );
+                  })}
                   {(!formData.proxies || formData.proxies.length === 0) && (
                     <span className="text-xs text-[#9E9A91] italic py-0.5">暂无单独配置出站项，可点击下方候选快速添加</span>
                   )}
