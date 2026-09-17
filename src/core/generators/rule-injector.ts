@@ -1132,16 +1132,41 @@ export function injectUnifiedToLoon(
             if (!proxies.includes(m)) proxies.push(m);
           });
         } else {
-          // If custom nodes, they are already present locally in [Proxy], so expand them!
+          // If custom nodes or local nodes, they are already present locally in [Proxy], so expand them!
           if (isCustom && customNodeNames.length > 0) {
             customNodeNames.forEach(m => {
               if (!proxies.includes(m)) proxies.push(m);
             });
           }
+          // Check if this source matches an active network subscription (Remote Proxy)
+          const matchedNetSrc = networkSources.find(s => {
+            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+          });
+          if (matchedNetSrc) {
+            const sTag = matchedNetSrc.name.replace(/[=,]/g, '_').trim();
+            if (!proxies.includes(sTag)) {
+              proxies.push(sTag);
+            }
+          } else {
+            // Local nodes or filter nodes not in networkSources
+            const matchedLocalNodes = nodes.filter(n => {
+              const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+              const sId = (n.sourceId || '').trim().toLowerCase();
+              return sName === cleanU || sId === cleanU;
+            }).map(n => n.name.replace(/[=,]/g, '_'));
+            matchedLocalNodes.forEach(m => {
+              if (!proxies.includes(m)) proxies.push(m);
+            });
+          }
+
+          // Check if there is an existing proxy group with this name (e.g. ⚡️ MESL)
           const matched = sourceGroupTags.find(st => st.replace(/^[⚡️\s]+/, '').trim().toLowerCase() === cleanU);
           const tagToAdd = matched || (u.startsWith('⚡️') ? u : `⚡️ ${u}`);
           if (effectiveGroups.some(g => g.name === tagToAdd) && !proxies.includes(tagToAdd)) {
             proxies.unshift(tagToAdd);
+          } else if (effectiveGroups.some(g => g.name === u) && !proxies.includes(u)) {
+            proxies.unshift(u);
           }
         }
       });
@@ -1150,7 +1175,11 @@ export function injectUnifiedToLoon(
     // Prune dangling references in Loon
     const validGroupNames = new Set(effectiveGroups.map(g => g.name));
     const validNodeNames = new Set(nodes.map(n => n.name.replace(/[=,]/g, '_')));
-    const validSubTags = new Set(sourceGroupTags.concat(networkSources.map(s => s.name.replace(/[=,]/g, '_'))));
+    const validSubTags = new Set([
+      ...sourceGroupTags,
+      ...networkSources.map(s => s.name.replace(/[=,]/g, '_').trim()),
+      ...networkSources.map(s => s.name.replace(/[=,]/g, '_').trim().replace(/^[⚡️\s]+/, ''))
+    ]);
     const isBuiltinLoonProxy = (t: string) => {
       const upper = t.trim().toUpperCase();
       return upper === 'DIRECT' || upper === 'REJECT' || upper === '全部节点' || t.trim() === '🎯 本地直连';
@@ -1166,7 +1195,13 @@ export function injectUnifiedToLoon(
       proxies = ['DIRECT'];
     }
 
-    groupLines.push(`${grp.name} = ${groupType}, ${proxies.join(', ')}`);
+    if (groupType === 'url-test') {
+      groupLines.push(`${grp.name} = url-test, ${proxies.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=${grp.interval || 300}, tolerance=${grp.tolerance || 50}`);
+    } else if (groupType === 'fallback') {
+      groupLines.push(`${grp.name} = fallback, ${proxies.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=${grp.interval || 300}`);
+    } else {
+      groupLines.push(`${grp.name} = ${groupType}, ${proxies.join(', ')}`);
+    }
   });
 
   // Ensure dedicated source groups exist if not yet added
@@ -1477,6 +1512,21 @@ export function injectUnifiedToQuantumultX(
           customNodeNames.forEach(m => {
             if (!proxies.includes(m)) proxies.push(m);
           });
+        } else {
+          const matchedNodes = nodes.filter(n => {
+            const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+            const sId = (n.sourceId || '').trim().toLowerCase();
+            return sName === cleanU || sId === cleanU;
+          }).map(n => n.name.replace(/[=,]/g, '_'));
+          matchedNodes.forEach(m => {
+            if (!proxies.includes(m)) proxies.push(m);
+          });
+          const grpTag = u.startsWith('⚡️') ? u : `⚡️ ${u}`;
+          if (validGroupNames.has(grpTag) && !proxies.includes(grpTag)) {
+            proxies.push(grpTag);
+          } else if (validGroupNames.has(u) && !proxies.includes(u)) {
+            proxies.push(u);
+          }
         }
       });
     }
@@ -1737,6 +1787,21 @@ export function injectUnifiedToEgern(
           customNodeNames.forEach(m => {
             if (!proxies.includes(m)) proxies.push(m);
           });
+        } else {
+          const matchedNodes = nodes.filter(n => {
+            const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+            const sId = (n.sourceId || '').trim().toLowerCase();
+            return sName === cleanU || sId === cleanU;
+          }).map(n => n.name.replace(/[=,]/g, '_'));
+          matchedNodes.forEach(m => {
+            if (!proxies.includes(m)) proxies.push(m);
+          });
+          const grpTag = u.startsWith('⚡️') ? u : `⚡️ ${u}`;
+          if (validGroupNames.has(grpTag) && !proxies.includes(grpTag)) {
+            proxies.push(grpTag);
+          } else if (validGroupNames.has(u) && !proxies.includes(u)) {
+            proxies.push(u);
+          }
         }
       });
     }
@@ -1754,6 +1819,9 @@ export function injectUnifiedToEgern(
       name: grp.name,
       type: groupType,
       proxies,
+      url: (groupType === 'url-test' || groupType === 'fallback') ? (grp.url || 'https://www.google.com/generate_204') : undefined,
+      interval: (groupType === 'url-test' || groupType === 'fallback') ? (grp.interval || 300) : undefined,
+      tolerance: groupType === 'url-test' ? (grp.tolerance || 50) : undefined,
     });
   });
 

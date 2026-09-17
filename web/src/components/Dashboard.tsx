@@ -705,25 +705,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
               {/* 格式切换 */}
               <div className="inline-flex rounded-xl border border-[#E3DDD2] p-1 bg-white text-xs shadow-2xs overflow-x-auto max-w-full">
                 {([
-                  { type: 'singbox', label: 'Sing-box', format: 'JSON' },
-                  { type: 'mihomo', label: 'Mihomo', format: 'YAML' },
-                  { type: 'loon', label: 'Loon', format: 'CONF' },
-                  { type: 'quantumultx', label: 'Quantumult X', format: 'CONF' },
-                  { type: 'egern', label: 'Egern', format: 'YAML' },
-                  { type: 'shadowrocket', label: '小火箭', format: 'CONF' },
-                ] as const).map(({ type, label, format }) => (
+                  { type: 'singbox', label: 'Sing-box' },
+                  { type: 'mihomo', label: 'Mihomo' },
+                  { type: 'loon', label: 'Loon' },
+                  { type: 'quantumultx', label: 'Quantumult X' },
+                  { type: 'egern', label: 'Egern' },
+                  { type: 'shadowrocket', label: '小火箭' },
+                ] as const).map(({ type, label }) => (
                   <button
                     key={type}
                     onClick={() => handlePreviewProfile(previewData.profile, type)}
-                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${previewData.clientType === type
+                    className={`px-3 py-1 rounded-lg text-xs font-medium transition-all cursor-pointer whitespace-nowrap ${previewData.clientType === type
                       ? 'bg-[#CC785C] text-white shadow-xs font-semibold'
                       : 'text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#FAF8F5]'
                       }`}
                   >
                     <span>{label}</span>
-                    <span className={`text-[10px] ${previewData.clientType === type ? 'text-white/80' : 'text-[#8C877D]'}`}>
-                      ({format})
-                    </span>
                   </button>
                 ))}
               </div>

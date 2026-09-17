@@ -193,8 +193,13 @@ export function generateLoonConfig(
   const lines = templateMcf.split('\n');
   const resultLines: string[] = [];
 
-  // In expandNodes mode, write all nodes into [Proxy]; otherwise only custom/manual nodes
-  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
+  // In expandNodes mode, write all nodes into [Proxy]; otherwise only custom/manual or non-remote-subscription nodes
+  const networkSourceIds = new Set(
+    sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http')).map(s => s.id)
+  );
+  const nodesToWrite = expandNodes
+    ? nodes
+    : nodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
   const generatedProxyLines = nodesToWrite.map(nodeToLoonProxy);
 
   let inProxySection = false;
