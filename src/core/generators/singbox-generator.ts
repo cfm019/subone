@@ -354,7 +354,8 @@ export function generateSingboxConfig(
   templateJson: string,
   nodes: ProxyNode[],
   proxyGroups: ProxyGroupItem[] = [],
-  rulesList: UnifiedRuleItem[] = []
+  rulesList: UnifiedRuleItem[] = [],
+  sources: any[] = []
 ): string {
   let doc: any;
   try {
@@ -365,10 +366,19 @@ export function generateSingboxConfig(
   if (!doc || typeof doc !== 'object') {
     doc = {};
   }
+  const allNodesMap = new Map<string, ProxyNode>();
+  nodes.forEach(n => allNodesMap.set(n.name, n));
+  sources.forEach(s => {
+    if ((s.type === 'filter' || s.type === 'custom' || !s.url || !s.url.startsWith('http')) && Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => {
+        if (!allNodesMap.has(n.name)) allNodesMap.set(n.name, n);
+      });
+    }
+  });
+  const allCandidateNodes = Array.from(allNodesMap.values());
+  const proxyOutbounds = allCandidateNodes.map(nodeToSingboxOutbound);
 
-  const proxyOutbounds = nodes.map(nodeToSingboxOutbound);
-
-  doc = injectUnifiedToSingbox(doc, proxyOutbounds, proxyGroups, rulesList);
+  doc = injectUnifiedToSingbox(doc, proxyOutbounds, proxyGroups, rulesList, sources);
 
   return JSON.stringify(doc, null, 2);
 }

@@ -1577,7 +1577,7 @@ app.post('/api/generate/preview', async (req, res) => {
     if (targetType === 'mihomo') {
       output = generateMihomoConfig(templateContent, nodes, groups, rules, effectiveSources);
     } else if (targetType === 'singbox') {
-      output = generateSingboxConfig(templateContent, nodes, groups, rules);
+      output = generateSingboxConfig(templateContent, nodes, groups, rules, effectiveSources);
     } else if (targetType === 'loon') {
       const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
       output = generateLoonConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
@@ -1648,7 +1648,7 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
     }
 
     if (detectedType === 'singbox') {
-      const output = generateSingboxConfig(templateContent, nodes, groups, rules);
+      const output = generateSingboxConfig(templateContent, nodes, groups, rules, sources);
       res.setHeader('Content-Type', 'application/json; charset=utf-8');
       return res.send(output);
     }

@@ -289,12 +289,23 @@ export function generateMihomoConfig(
     doc = {};
   }
 
-  // 1. Inject Custom / Manual Proxies directly (if any)
-  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
-  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
+  // 1. Inject Custom / Manual / Filter Proxies directly (if any)
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
+  const networkSourceIds = new Set(networkSources.map(s => s.id));
 
-  // If no network providers configured, fallback to writing all nodes
-  const nodesToWrite = networkSources.length > 0 ? customNodes : nodes;
+  const allNodesMap = new Map<string, ProxyNode>();
+  nodes.forEach(n => allNodesMap.set(n.name, n));
+  sources.forEach(s => {
+    if ((s.type === 'filter' || s.type === 'custom' || !s.url || !s.url.startsWith('http')) && Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => {
+        if (!allNodesMap.has(n.name)) allNodesMap.set(n.name, n);
+      });
+    }
+  });
+  const allCandidateNodes = Array.from(allNodesMap.values());
+  const nodesToWrite = networkSources.length > 0
+    ? allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId))
+    : allCandidateNodes;
   doc.proxies = nodesToWrite.map(nodeToMihomoProxy);
 
   // 2. Inject Proxy Groups & Unified Rules & Proxy Providers & DNS

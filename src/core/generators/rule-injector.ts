@@ -129,6 +129,11 @@ export function injectUnifiedToMihomo(
 
   const validGroupNames = new Set(effectiveGroups.map(g => g.name));
   const validNodeNames = new Set(allNodeNames);
+  sources.forEach(s => {
+    if (Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => validNodeNames.add(n.name));
+    }
+  });
   const isBuiltinClashProxy = (t: string) => {
     const upper = t.trim().toUpperCase();
     return (
@@ -218,6 +223,17 @@ export function injectUnifiedToMihomo(
             combinedProxies.add(customTagName);
           }
           customNodeNames.forEach(name => combinedProxies.add(name));
+        }
+
+        // Check if matching source (especially filter/derived sources without proxy-provider)
+        const matchedSource = sources.find(s => {
+          const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+          return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+        });
+        if (matchedSource && (matchedSource.type === 'filter' || !matchedSource.url || !matchedSource.url.startsWith('http'))) {
+          if (Array.isArray(matchedSource.nodes)) {
+            matchedSource.nodes.forEach(n => combinedProxies.add(n.name));
+          }
         }
       });
 
@@ -350,7 +366,8 @@ export function injectUnifiedToSingbox(
   doc: any,
   proxyOutbounds: any[],
   proxyGroups: ProxyGroupItem[],
-  rulesList: UnifiedRuleItem[]
+  rulesList: UnifiedRuleItem[],
+  sources: any[] = []
 ): any {
   if (!doc.route) doc.route = {};
   if (!doc.outbounds) doc.outbounds = [];
@@ -403,6 +420,12 @@ export function injectUnifiedToSingbox(
   // Prune any dedicated source groups from effectiveGroups that have NO active nodes in discoveredSources
   const activeDiscoveredTags = new Set(Array.from(discoveredSources.values()).map(s => s.groupTag.toLowerCase()));
   const activeDiscoveredNames = new Set(Array.from(discoveredSources.values()).map(s => s.sourceName.toLowerCase()));
+  sources.forEach(s => {
+    if (s.name) {
+      activeDiscoveredNames.add(s.name.toLowerCase());
+      activeDiscoveredNames.add(s.name.toLowerCase().replace(/^[⚡️\s]+/, '').trim());
+    }
+  });
   const hasDiscoveredCustom = Array.from(discoveredSources.values()).some(s => s.isCustom);
 
   const deadGroupTags = new Set<string>();
@@ -489,18 +512,20 @@ export function injectUnifiedToSingbox(
       return;
     }
 
-    const srcGroup: ProxyGroupItem = {
-      id: `grp-src-${info.sourceName}`,
-      name: info.groupTag,
-      type: info.isCustom ? 'select' : 'urltest',
-      use: [info.sourceName],
-      tolerance: 50,
-      interval: 300,
-      url: 'https://www.google.com/generate_204',
-    };
-    effectiveGroups.push(srcGroup);
-    existingGroupNames.add(info.groupTag.toLowerCase());
-    existingCleanNames.add(cleanName);
+    if (info.isCustom) {
+      const srcGroup: ProxyGroupItem = {
+        id: `grp-src-${info.sourceName}`,
+        name: info.groupTag,
+        type: 'select',
+        use: [info.sourceName],
+        tolerance: 50,
+        interval: 300,
+        url: 'https://www.google.com/generate_204',
+      };
+      effectiveGroups.push(srcGroup);
+      existingGroupNames.add(info.groupTag.toLowerCase());
+      existingCleanNames.add(cleanName);
+    }
   });
 
   // Ensure '🚀 节点选择' references all active source groups (only if that source group exists in effectiveGroups)
@@ -522,6 +547,11 @@ export function injectUnifiedToSingbox(
 
   const validGroupTags = new Set(effectiveGroups.map(g => g.name));
   const validNodeTags = new Set(allNodeTags);
+  sources.forEach(s => {
+    if (Array.isArray(s.nodes)) {
+      s.nodes.forEach((n: any) => validNodeTags.add(n.name));
+    }
+  });
   const isBuiltinSingboxOutbound = (t: string) => {
     const upper = t.trim().toUpperCase();
     return (
@@ -553,13 +583,26 @@ export function injectUnifiedToSingbox(
 
     let outboundsList = grp.proxies ? [...grp.proxies] : [];
 
-    // Support use: [ "MESL" ] or [ "自建节点" ] by matching exact source names
+    // Support use: [ "MESL" ] or [ "自建节点" ] or [ "HK优选" ]
     if (grp.use && grp.use.length > 0) {
       const useNormalized = new Set(
         grp.use.map(u => u.trim().toLowerCase().replace(/^[⚡️\s]+/, ''))
       );
+
+      // Match node tags directly from matching sources (especially filter/derived sources)
+      const matchedNodeTagsFromSources = new Set<string>();
+      sources.forEach(s => {
+        const sClean = s.name.trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+        if (useNormalized.has(sClean) || useNormalized.has(s.id.trim().toLowerCase())) {
+          if (Array.isArray(s.nodes)) {
+            s.nodes.forEach((n: any) => matchedNodeTagsFromSources.add(n.name));
+          }
+        }
+      });
+
       const matchedNodeTags = proxyOutbounds
         .filter(p => {
+          if (matchedNodeTagsFromSources.has(p.tag)) return true;
           const sName = (p._sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
           const sId = (p._sourceId || '').trim().toLowerCase();
           const isCustom = sId === 'custom' || sId.startsWith('custom');
@@ -1428,6 +1471,14 @@ export function injectUnifiedToQuantumultX(
   }
 
   // 2. Build [policy]
+  const validGroupNames = new Set(effectiveGroups.map(g => g.name));
+  const validNodeNames = new Set(allNodeNames);
+  sources.forEach(s => {
+    if (Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => validNodeNames.add(n.name.replace(/[=,]/g, '_')));
+    }
+  });
+
   const groupLines: string[] = [];
   effectiveGroups.forEach(grp => {
     if (grp.type === 'direct') {
@@ -1509,12 +1560,21 @@ export function injectUnifiedToQuantumultX(
             if (!proxies.includes(m)) proxies.push(m);
           });
         } else {
-          const matchedNodes = nodes.filter(n => {
-            const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
-            const sId = (n.sourceId || '').trim().toLowerCase();
-            return sName === cleanU || sId === cleanU;
-          }).map(n => n.name.replace(/[=,]/g, '_'));
-          matchedNodes.forEach(m => {
+          const matchedSource = sources.find(s => {
+            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+          });
+          let srcNodeList: string[] = [];
+          if (matchedSource && Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
+            srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
+          } else {
+            srcNodeList = nodes.filter(n => {
+              const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+              const sId = (n.sourceId || '').trim().toLowerCase();
+              return sName === cleanU || sId === cleanU;
+            }).map(n => n.name.replace(/[=,]/g, '_'));
+          }
+          srcNodeList.forEach(m => {
             if (!proxies.includes(m)) proxies.push(m);
           });
           const grpTag = u.startsWith('⚡️') ? u : `⚡️ ${u}`;
@@ -1527,8 +1587,6 @@ export function injectUnifiedToQuantumultX(
       });
     }
 
-    const validGroupNames = new Set(effectiveGroups.map(g => g.name));
-    const validNodeNames = new Set(allNodeNames);
     proxies = proxies.map(p => {
       const u = p.trim().toUpperCase();
       if (u === 'DIRECT' || p.trim() === '🎯 本地直连') return 'direct';
@@ -1695,6 +1753,14 @@ export function injectUnifiedToEgern(
     });
   }
 
+  const validGroupNames = new Set(effectiveGroups.map(g => g.name));
+  const validNodeNames = new Set(allNodeNames);
+  sources.forEach(s => {
+    if (Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => validNodeNames.add(n.name.replace(/[=,]/g, '_')));
+    }
+  });
+
   const generatedGroups: any[] = [];
   effectiveGroups.forEach(grp => {
     if (grp.type === 'direct') {
@@ -1784,12 +1850,21 @@ export function injectUnifiedToEgern(
             if (!proxies.includes(m)) proxies.push(m);
           });
         } else {
-          const matchedNodes = nodes.filter(n => {
-            const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
-            const sId = (n.sourceId || '').trim().toLowerCase();
-            return sName === cleanU || sId === cleanU;
-          }).map(n => n.name.replace(/[=,]/g, '_'));
-          matchedNodes.forEach(m => {
+          const matchedSource = sources.find(s => {
+            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+          });
+          let srcNodeList: string[] = [];
+          if (matchedSource && Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
+            srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
+          } else {
+            srcNodeList = nodes.filter(n => {
+              const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+              const sId = (n.sourceId || '').trim().toLowerCase();
+              return sName === cleanU || sId === cleanU;
+            }).map(n => n.name.replace(/[=,]/g, '_'));
+          }
+          srcNodeList.forEach(m => {
             if (!proxies.includes(m)) proxies.push(m);
           });
           const grpTag = u.startsWith('⚡️') ? u : `⚡️ ${u}`;
@@ -1802,8 +1877,6 @@ export function injectUnifiedToEgern(
       });
     }
 
-    const validGroupNames = new Set(effectiveGroups.map(g => g.name));
-    const validNodeNames = new Set(allNodeNames);
     proxies = proxies.map(p => p.trim() === '🎯 本地直连' ? 'DIRECT' : p.trim()).filter(p => {
       if (!p || p === grp.name) return false;
       return validGroupNames.has(p) || validNodeNames.has(p) || p === 'DIRECT' || p === 'REJECT';
@@ -1930,12 +2003,26 @@ export function injectUnifiedToShadowrocket(
             .map(n => n.name.replace(/[=,]/g, '_'));
           members.push(...(groupNodes.length > 0 ? groupNodes : customNodeNames));
         } else {
-          const matchedSrc = networkSources.find(s => s.name === u || s.id === u);
+          const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+          const matchedSrc = sources.find(s => {
+            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+          });
           if (matchedSrc) {
-            if (expandNodes) {
-              const srcNodes = nodes
-                .filter(n => n.sourceName === matchedSrc.name || n.sourceId === matchedSrc.id)
-                .map(n => n.name.replace(/[=,]/g, '_'));
+            const isRemoteNetwork = matchedSrc.enabled && matchedSrc.type !== 'custom' && matchedSrc.type !== 'filter' && matchedSrc.url && matchedSrc.url.startsWith('http');
+            if (!isRemoteNetwork || expandNodes) {
+              let srcNodes: string[] = [];
+              if (Array.isArray(matchedSrc.nodes) && matchedSrc.nodes.length > 0) {
+                srcNodes = matchedSrc.nodes.map(n => n.name.replace(/[=,]/g, '_'));
+              } else {
+                srcNodes = nodes
+                  .filter(n => {
+                    const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+                    const sId = (n.sourceId || '').trim().toLowerCase();
+                    return sName === cleanU || sId === cleanU;
+                  })
+                  .map(n => n.name.replace(/[=,]/g, '_'));
+              }
               members.push(...srcNodes);
             } else {
               const sTag = matchedSrc.name.replace(/[=,]/g, '_').trim();

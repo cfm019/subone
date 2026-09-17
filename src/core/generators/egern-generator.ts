@@ -16,6 +16,7 @@ export function generateEgernConfig(
   sources: SubscriptionSource[] = [],
   options?: { expandNodes?: boolean }
 ): string {
+  const expandNodes = Boolean(options?.expandNodes);
   let doc: any;
   try {
     doc = yaml.load(templateYaml);
@@ -27,8 +28,23 @@ export function generateEgernConfig(
     doc = {};
   }
 
-  const expandNodes = Boolean(options?.expandNodes);
-  const nodesToWrite = expandNodes ? nodes : nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
+  const allNodesMap = new Map<string, ProxyNode>();
+  nodes.forEach(n => allNodesMap.set(n.name, n));
+  sources.forEach(s => {
+    if ((s.type === 'filter' || s.type === 'custom' || !s.url || !s.url.startsWith('http')) && Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => {
+        if (!allNodesMap.has(n.name)) allNodesMap.set(n.name, n);
+      });
+    }
+  });
+  const allCandidateNodes = Array.from(allNodesMap.values());
+
+  const networkSourceIds = new Set(
+    sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http')).map(s => s.id)
+  );
+  const nodesToWrite = expandNodes
+    ? allCandidateNodes
+    : allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
   const egernProxies = nodesToWrite.map(nodeToEgernProxy);
 
   doc = injectUnifiedToEgern(doc, egernProxies, nodes, proxyGroups, rulesList, sources, options);
