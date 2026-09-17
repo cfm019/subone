@@ -194,12 +194,25 @@ export function generateLoonConfig(
   const resultLines: string[] = [];
 
   // In expandNodes mode, write all nodes into [Proxy]; otherwise only custom/manual or non-remote-subscription nodes
+  const allNodesMap = new Map<string, ProxyNode>();
+  nodes.forEach(n => allNodesMap.set(n.name, n));
+  sources.forEach(s => {
+    if ((s.type === 'filter' || s.type === 'custom' || !s.url || !s.url.startsWith('http')) && Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => {
+        if (!allNodesMap.has(n.name)) {
+          allNodesMap.set(n.name, n);
+        }
+      });
+    }
+  });
+  const allCandidateNodes = Array.from(allNodesMap.values());
+
   const networkSourceIds = new Set(
-    sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http')).map(s => s.id)
+    sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http')).map(s => s.id)
   );
   const nodesToWrite = expandNodes
-    ? nodes
-    : nodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
+    ? allCandidateNodes
+    : allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
   const generatedProxyLines = nodesToWrite.map(nodeToLoonProxy);
 
   let inProxySection = false;

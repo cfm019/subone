@@ -1117,57 +1117,64 @@ export function injectUnifiedToLoon(
     }
 
     // Support grp.use: ['自建'] or ['⚡️ 自建'] or ['MESL']
+    // Support grp.use: ['自建'] or ['⚡️ 自建'] or ['MESL'] or ['HK优选']
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
         const isCustom = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === '手工自建' || cleanU === 'custom' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
-        if (expandNodes) {
-          const matchedNodes = nodes.filter(n => {
-            const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
-            const sId = (n.sourceId || '').trim().toLowerCase();
-            const nIsCustom = sId === 'custom' || sId.startsWith('custom');
-            return sName === cleanU || sId === cleanU || (nIsCustom && isCustom);
-          }).map(n => n.name.replace(/[=,]/g, '_'));
-          matchedNodes.forEach(m => {
+
+        const matchedSource = sources.find(s => {
+          const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+          return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+        });
+
+        const isNetSrc = Boolean(
+          matchedSource &&
+          matchedSource.type !== 'filter' &&
+          matchedSource.type !== 'custom' &&
+          matchedSource.url &&
+          matchedSource.url.startsWith('http') &&
+          networkSources.some(ns => ns.id === matchedSource.id)
+        );
+
+        if (expandNodes || !isNetSrc) {
+          // Local/custom/filter source: expand its nodes directly
+          let srcNodeList: string[] = [];
+          if (matchedSource && Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
+            srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
+          } else {
+            srcNodeList = nodes.filter(n => {
+              const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+              const sId = (n.sourceId || '').trim().toLowerCase();
+              const nIsCustom = sId === 'custom' || sId.startsWith('custom');
+              return sName === cleanU || sId === cleanU || (nIsCustom && isCustom);
+            }).map(n => n.name.replace(/[=,]/g, '_'));
+          }
+
+          srcNodeList.forEach(m => {
             if (!proxies.includes(m)) proxies.push(m);
           });
-        } else {
-          // If custom nodes or local nodes, they are already present locally in [Proxy], so expand them!
+
           if (isCustom && customNodeNames.length > 0) {
             customNodeNames.forEach(m => {
               if (!proxies.includes(m)) proxies.push(m);
             });
           }
-          // Check if this source matches an active network subscription (Remote Proxy)
-          const matchedNetSrc = networkSources.find(s => {
-            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
-          });
-          if (matchedNetSrc) {
-            const sTag = matchedNetSrc.name.replace(/[=,]/g, '_').trim();
-            if (!proxies.includes(sTag)) {
-              proxies.push(sTag);
-            }
-          } else {
-            // Local nodes or filter nodes not in networkSources
-            const matchedLocalNodes = nodes.filter(n => {
-              const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
-              const sId = (n.sourceId || '').trim().toLowerCase();
-              return sName === cleanU || sId === cleanU;
-            }).map(n => n.name.replace(/[=,]/g, '_'));
-            matchedLocalNodes.forEach(m => {
-              if (!proxies.includes(m)) proxies.push(m);
-            });
+        } else if (matchedSource) {
+          // Remote HTTP subscription: reference tag directly
+          const sTag = matchedSource.name.replace(/[=,]/g, '_').trim();
+          if (!proxies.includes(sTag)) {
+            proxies.push(sTag);
           }
+        }
 
-          // Check if there is an existing proxy group with this name (e.g. ⚡️ MESL)
-          const matched = sourceGroupTags.find(st => st.replace(/^[⚡️\s]+/, '').trim().toLowerCase() === cleanU);
-          const tagToAdd = matched || (u.startsWith('⚡️') ? u : `⚡️ ${u}`);
-          if (effectiveGroups.some(g => g.name === tagToAdd) && !proxies.includes(tagToAdd)) {
-            proxies.unshift(tagToAdd);
-          } else if (effectiveGroups.some(g => g.name === u) && !proxies.includes(u)) {
-            proxies.unshift(u);
-          }
+        // Check if there is an existing proxy group with this name (e.g. ⚡️ MESL)
+        const matched = sourceGroupTags.find(st => st.replace(/^[⚡️\s]+/, '').trim().toLowerCase() === cleanU);
+        const tagToAdd = matched || (u.startsWith('⚡️') ? u : `⚡️ ${u}`);
+        if (effectiveGroups.some(g => g.name === tagToAdd) && !proxies.includes(tagToAdd)) {
+          proxies.unshift(tagToAdd);
+        } else if (effectiveGroups.some(g => g.name === u) && !proxies.includes(u)) {
+          proxies.unshift(u);
         }
       });
     }
@@ -1175,6 +1182,11 @@ export function injectUnifiedToLoon(
     // Prune dangling references in Loon
     const validGroupNames = new Set(effectiveGroups.map(g => g.name));
     const validNodeNames = new Set(nodes.map(n => n.name.replace(/[=,]/g, '_')));
+    sources.forEach(s => {
+      if (Array.isArray(s.nodes)) {
+        s.nodes.forEach(n => validNodeNames.add(n.name.replace(/[=,]/g, '_')));
+      }
+    });
     const validSubTags = new Set([
       ...sourceGroupTags,
       ...networkSources.map(s => s.name.replace(/[=,]/g, '_').trim()),

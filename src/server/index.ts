@@ -540,14 +540,15 @@ function getEffectiveGroupsForProfile(profile: SubscriptionProfile, effectiveNod
 
 function getEffectiveSourcesForProfile(profile?: SubscriptionProfile, effectiveNodes?: ProxyNode[]): SubscriptionSource[] {
   if (!profile) return appConfig.sources;
+  if (Array.isArray(profile.nodeFilter?.sourceIds) && profile.nodeFilter.sourceIds.length > 0) {
+    const selectedSourceIds = new Set(profile.nodeFilter.sourceIds);
+    return appConfig.sources.filter(s => selectedSourceIds.has(s.id) || (s.id === 'custom' && selectedSourceIds.has('custom')));
+  }
   const usedSourceIds = new Set<string>();
   if (Array.isArray(effectiveNodes)) {
     effectiveNodes.forEach(n => {
       if (n.sourceId) usedSourceIds.add(n.sourceId);
     });
-  }
-  if (Array.isArray(profile.nodeFilter?.sourceIds) && profile.nodeFilter.sourceIds.length > 0) {
-    profile.nodeFilter.sourceIds.forEach(id => usedSourceIds.add(id));
   }
   if (usedSourceIds.size > 0) {
     return appConfig.sources.filter(s => usedSourceIds.has(s.id) || (s.id === 'custom' && usedSourceIds.has('custom')));
