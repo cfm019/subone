@@ -1334,14 +1334,6 @@ export function injectUnifiedToLoon(
       });
     }
 
-    // Normalize proxies: if a proxy matches any effective group by clean name (e.g. ⚡️ AI优选 -> ✨ AI优选), map to actual group name
-    proxies = proxies.map(p => {
-      const pClean = cleanSourceOrGroupName(p).toLowerCase();
-      const matchedGrp = effectiveGroups.find(g => cleanSourceOrGroupName(g.name).toLowerCase() === pClean);
-      if (matchedGrp) return matchedGrp.name;
-      return p;
-    });
-
     // Prune dangling references in Loon
     const validGroupNames = new Set(effectiveGroups.map(g => g.name));
     const validNodeNames = new Set(nodes.map(n => n.name.replace(/[=,]/g, '_')));
@@ -1358,6 +1350,22 @@ export function injectUnifiedToLoon(
       const upper = t.trim().toUpperCase();
       return upper === 'DIRECT' || upper === 'REJECT' || upper === '全部节点' || t.trim() === '🎯 本地直连';
     };
+
+    // Normalize proxies: if a proxy matches any effective group by clean name (e.g. ⚡️ AI优选 -> ✨ AI优选), map to actual group name,
+    // but preserve exact Remote Proxy subscription tags (e.g. AI优选, HK优选, 独立节点组)
+    proxies = proxies.map(p => {
+      const trimmed = p.trim();
+      if (validSubTags.has(trimmed)) {
+        return trimmed;
+      }
+      if (validGroupNames.has(trimmed)) {
+        return trimmed;
+      }
+      const pClean = cleanSourceOrGroupName(trimmed).toLowerCase();
+      const matchedGrp = effectiveGroups.find(g => cleanSourceOrGroupName(g.name).toLowerCase() === pClean);
+      if (matchedGrp) return matchedGrp.name;
+      return p;
+    });
 
     proxies = Array.from(new Set(proxies)).filter(p => {
       if (!p || p.trim() === grp.name) return false;
