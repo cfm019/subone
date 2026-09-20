@@ -4,6 +4,15 @@
 
 目标格式支持 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
 
+## 更新记录
+
+### 2026-09
+- **自建与独立节点组支持按源订阅解耦**：
+  - 针对 Loon、Mihomo (Clash)、Quantumult X、Egern 等客户端，外部机场订阅保持原链接，自建与独立节点组自动转换为 Subone 独立按源订阅端点（`/s/:token/source/:sourceId`）。
+  - 主配置文件中的静态实体节点区留空，策略组直接绑定订阅源 Tag 或名称。节点变动时仅需在客户端刷新对应订阅源，无需重新覆盖主配置。
+  - Sing-box 客户端保持既有全局内联 outbounds 逻辑不变。
+
+---
 
 ## 快速开始
 
@@ -49,15 +58,7 @@ docker compose up -d
 
 ---
 
-## 更新记录
 
-### 2026-09
-- **自建与独立节点组支持按源订阅解耦**：
-  - 针对 Loon、Mihomo (Clash)、Quantumult X、Egern 等客户端，外部机场订阅保持原链接，自建与独立节点组自动转换为 Subone 独立按源订阅端点（`/s/:token/source/:sourceId`）。
-  - 主配置文件中的静态实体节点区留空，策略组直接绑定订阅源 Tag 或名称。节点变动时仅需在客户端刷新对应订阅源，无需重新覆盖主配置。
-  - Sing-box 客户端保持既有全局内联 outbounds 逻辑不变。
-
----
 
 ## 主要特性
 
