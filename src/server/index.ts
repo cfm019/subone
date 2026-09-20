@@ -22,6 +22,11 @@ import {
   exportRulesToText,
 } from '../core/parser/rules-parser.js';
 import {
+  formatSourceGroupTag,
+  cleanSourceOrGroupName,
+  getSourceGroupPrefix,
+} from '../core/generators/rule-injector.js';
+import {
   AppConfig,
   ProxyNode,
   ConfigTemplate,
@@ -251,19 +256,17 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
   if (customSrc.name === '自建节点' || customSrc.name === '独立节点') {
     customSrc.name = '独立节点组';
   }
-  const srcName = (customSrc.name || '独立节点组').trim();
-  const targetTag = srcName.startsWith('⚡️') ? srcName : `⚡️ ${srcName}`;
+  const srcName = cleanSourceOrGroupName(customSrc.name || '独立节点组');
+  const targetTag = formatSourceGroupTag(customSrc);
 
   // Find any existing group associated with this custom source
   const existingGroup = config.proxyGroups.find(g => 
     g.id === 'grp-src-custom' ||
     g.id === `grp-src-${customSrc.id}` ||
-    g.name === targetTag ||
-    g.name === srcName ||
-    g.name === '⚡️ 自建节点' ||
-    g.name === '自建节点' ||
-    g.name === '⚡️ 独立节点组' ||
-    g.name === '独立节点组'
+    cleanSourceOrGroupName(g.name).toLowerCase() === srcName.toLowerCase() ||
+    cleanSourceOrGroupName(g.name).toLowerCase() === '自建节点' ||
+    cleanSourceOrGroupName(g.name).toLowerCase() === '独立节点' ||
+    cleanSourceOrGroupName(g.name).toLowerCase() === '独立节点组'
   );
 
   if (existingGroup) {
@@ -277,11 +280,12 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
       changed = true;
     }
 
-    // Remove any stale legacy duplicate groups (e.g. old "⚡️ 自建节点")
+    // Remove any stale legacy duplicate groups (e.g. old "⚡️ 自建节点", "⚡️ 独立节点组")
     const prevLen = config.proxyGroups.length;
     config.proxyGroups = config.proxyGroups.filter(g => {
       if (g === existingGroup) return true;
-      if (g.name === '⚡️ 自建节点' || g.name === '自建节点') return false;
+      const c = cleanSourceOrGroupName(g.name).toLowerCase();
+      if (c === '自建节点' || c === '独立节点' || c === '独立节点组') return false;
       return true;
     });
     if (config.proxyGroups.length !== prevLen) changed = true;
@@ -290,14 +294,20 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
     config.proxyGroups.forEach(grp => {
       if (grp !== existingGroup) {
         if (grp.use) {
-          const newUse = grp.use.map(u => (u === '自建节点' || u === '⚡️ 自建节点' || u === '独立节点' || u === '⚡️ 独立节点' || u === oldName ? srcName : u));
+          const newUse = grp.use.map(u => {
+            const c = cleanSourceOrGroupName(u).toLowerCase();
+            return c === '自建节点' || c === '独立节点' || c === '独立节点组' || u === oldName ? srcName : u;
+          });
           if (JSON.stringify(newUse) !== JSON.stringify(grp.use)) {
             grp.use = newUse;
             changed = true;
           }
         }
         if (grp.proxies) {
-          const newProxies = grp.proxies.map(p => (p === '⚡️ 独立节点组' || p === '独立节点组' || p === oldName ? targetTag : p));
+          const newProxies = grp.proxies.map(p => {
+            const c = cleanSourceOrGroupName(p).toLowerCase();
+            return c === '自建节点' || c === '独立节点' || c === '独立节点组' || p === oldName ? targetTag : p;
+          });
           if (JSON.stringify(newProxies) !== JSON.stringify(grp.proxies)) {
             grp.proxies = newProxies;
             changed = true;
@@ -330,8 +340,93 @@ function ensureCustomProxyGroup(config: AppConfig): boolean {
   return true;
 }
 
+export function ensureAllSourceProxyGroups(config: AppConfig): boolean {
+  let changed = false;
+  const enabledSources = (config.sources || []).filter(s => s.enabled);
+  const nameMigrationMap = new Map<string, string>();
+
+  enabledSources.forEach(s => {
+    const sClean = cleanSourceOrGroupName(s.name || '');
+    if (!sClean) return;
+    const targetGroupTag = formatSourceGroupTag(s);
+    const targetGroupId = s.id === 'custom' ? 'grp-src-custom' : `grp-src-${s.id}`;
+
+    const existingGroup = config.proxyGroups.find(g => {
+      if (g.id === targetGroupId) return true;
+      if (s.id === 'custom' && g.id === 'grp-src-custom') return true;
+      const gClean = cleanSourceOrGroupName(g.name).toLowerCase();
+      return gClean === sClean.toLowerCase();
+    });
+
+    if (existingGroup) {
+      if (existingGroup.name !== targetGroupTag) {
+        nameMigrationMap.set(existingGroup.name, targetGroupTag);
+        existingGroup.name = targetGroupTag;
+        changed = true;
+      }
+      if (existingGroup.id !== targetGroupId) {
+        existingGroup.id = targetGroupId;
+        changed = true;
+      }
+      if (!existingGroup.use || existingGroup.use[0] !== sClean) {
+        existingGroup.use = [sClean];
+        changed = true;
+      }
+    } else {
+      const newGroup: ProxyGroupItem = {
+        id: targetGroupId,
+        name: targetGroupTag,
+        type: s.type === 'custom' ? 'select' : 'urltest',
+        use: [sClean],
+        tolerance: 50,
+        interval: 300,
+        url: 'https://www.google.com/generate_204',
+      };
+      config.proxyGroups.push(newGroup);
+      changed = true;
+    }
+  });
+
+  // Migrate references in all proxyGroups
+  // e.g. ⚡️ AI优选 -> ✨ AI优选, ⚡️ HK优选 -> ✨ HK优选, ⚡️ 独立节点组 -> 🖥️ 独立节点组
+  enabledSources.forEach(s => {
+    const targetTag = formatSourceGroupTag(s);
+    nameMigrationMap.set(`⚡️ ${s.name}`, targetTag);
+    nameMigrationMap.set(`✨ ${s.name}`, targetTag);
+    nameMigrationMap.set(`🖥️ ${s.name}`, targetTag);
+    nameMigrationMap.set(s.name, targetTag);
+  });
+
+  config.proxyGroups.forEach(grp => {
+    if (grp.proxies) {
+      let pChanged = false;
+      const newProxies = grp.proxies.map(p => {
+        const matchedSource = enabledSources.find(s => {
+          const sClean = cleanSourceOrGroupName(s.name).toLowerCase();
+          return cleanSourceOrGroupName(p).toLowerCase() === sClean;
+        });
+        if (matchedSource) {
+          const canonicalTag = formatSourceGroupTag(matchedSource);
+          if (p !== canonicalTag) {
+            pChanged = true;
+            return canonicalTag;
+          }
+        }
+        return p;
+      });
+      if (pChanged) {
+        grp.proxies = newProxies;
+        changed = true;
+      }
+    }
+  });
+
+  return changed;
+}
+
 ensureCustomSource(appConfig);
 ensureCustomProxyGroup(appConfig);
+ensureAllSourceProxyGroups(appConfig);
 saveConfig(appConfig);
 
 // Initialize in-memory cache directly from persisted source nodes
@@ -447,13 +542,47 @@ export async function getEffectiveNodesForProfile(profile: SubscriptionProfile):
 }
 
 function getEffectiveGroupsForProfile(profile: SubscriptionProfile, effectiveNodes?: ProxyNode[]): ProxyGroupItem[] {
-  if (ensureCustomProxyGroup(appConfig)) {
+  let configChanged = false;
+  if (ensureCustomProxyGroup(appConfig)) configChanged = true;
+  if (ensureAllSourceProxyGroups(appConfig)) configChanged = true;
+  if (configChanged) {
     saveConfig(appConfig);
   }
   let groups: ProxyGroupItem[];
   if (Array.isArray(profile.selectedGroupIds) && profile.selectedGroupIds.length > 0) {
     const set = new Set(profile.selectedGroupIds);
     groups = appConfig.proxyGroups.filter(g => set.has(g.id));
+
+    // Recursively ensure any groups referenced by selected groups in proxies list are also included
+    const includedGroupNames = new Set(groups.map(g => g.name));
+    let added = true;
+    while (added) {
+      added = false;
+      const referencedGroupNames = new Set<string>();
+      groups.forEach(g => {
+        if (g.proxies) {
+          g.proxies.forEach(p => {
+            if (!includedGroupNames.has(p)) {
+              referencedGroupNames.add(p);
+            }
+          });
+        }
+      });
+
+      if (referencedGroupNames.size > 0) {
+        const additionalGroups = appConfig.proxyGroups.filter(g =>
+          referencedGroupNames.has(g.name) ||
+          Array.from(referencedGroupNames).some(r => cleanSourceOrGroupName(r).toLowerCase() === cleanSourceOrGroupName(g.name).toLowerCase())
+        );
+        additionalGroups.forEach(ag => {
+          if (!includedGroupNames.has(ag.name)) {
+            includedGroupNames.add(ag.name);
+            groups.push(ag);
+            added = true;
+          }
+        });
+      }
+    }
   } else {
     groups = appConfig.proxyGroups;
   }
@@ -474,10 +603,19 @@ function getEffectiveGroupsForProfile(profile: SubscriptionProfile, effectiveNod
       if (sId) activeSourceIds.add(sId.toLowerCase());
       if (sName) {
         activeSourceNames.add(sName.toLowerCase());
-        activeSourceNames.add(sName.toLowerCase().replace(/^[⚡️\s]+/, ''));
+        activeSourceNames.add(cleanSourceOrGroupName(sName).toLowerCase());
       }
       if (sId === 'custom' || sId.startsWith('custom') || sName === '自建节点' || sName === '独立节点组') {
         hasCustomNodes = true;
+      }
+    });
+
+    // Also include filter sources that have nodes
+    appConfig.sources.forEach(s => {
+      if (s.type === 'filter' && s.enabled && Array.isArray(s.nodes) && s.nodes.length > 0) {
+        activeSourceIds.add(s.id.toLowerCase());
+        activeSourceNames.add(s.name.toLowerCase());
+        activeSourceNames.add(cleanSourceOrGroupName(s.name).toLowerCase());
       }
     });
 
@@ -498,7 +636,7 @@ function getEffectiveGroupsForProfile(profile: SubscriptionProfile, effectiveNod
     const deadGroupNames = new Set<string>();
     mappedGroups = mappedGroups.filter(g => {
       if (isProtectedGroup(g)) return true;
-      const gClean = g.name.toLowerCase().replace(/^[⚡️\s]+/, '').trim();
+      const gClean = cleanSourceOrGroupName(g.name).toLowerCase();
       const isCustomGrp = g.id === 'grp-src-custom' || gClean === '自建节点' || gClean === '独立节点组';
       const isDedicatedSourceGroup = g.id.startsWith('grp-src-') || isCustomGrp;
       if (!isDedicatedSourceGroup) return true;
@@ -512,7 +650,7 @@ function getEffectiveGroupsForProfile(profile: SubscriptionProfile, effectiveNod
       }
 
       // Dedicated subscription source group
-      const useSrc = (g.use && g.use.length === 1) ? g.use[0].toLowerCase().replace(/^[⚡️\s]+/, '').trim() : gClean;
+      const useSrc = (g.use && g.use.length === 1) ? cleanSourceOrGroupName(g.use[0]).toLowerCase() : gClean;
       const isActive =
         activeSourceNames.has(gClean) ||
         activeSourceNames.has(useSrc) ||
@@ -787,6 +925,8 @@ app.post('/api/sources', async (req, res) => {
         lastUpdated: new Date().toISOString(),
       };
       appConfig.sources.push(newCustomSource);
+      ensureCustomProxyGroup(appConfig);
+      ensureAllSourceProxyGroups(appConfig);
       saveConfig(appConfig);
       globalNodesCache = collectNodesFromSources(appConfig);
       return res.json({ success: true, count: 0, data: newCustomSource });
@@ -811,6 +951,7 @@ app.post('/api/sources', async (req, res) => {
       };
       appConfig.sources.push(newFilterSource);
       globalNodesCache = collectNodesFromSources(appConfig);
+      ensureAllSourceProxyGroups(appConfig);
       saveConfig(appConfig);
       return res.json({ success: true, count: newFilterSource.nodeCount, data: newFilterSource });
     }
@@ -846,29 +987,14 @@ app.post('/api/sources', async (req, res) => {
     }
 
     appConfig.sources.push(newSource);
+    ensureAllSourceProxyGroups(appConfig);
 
-    // Automatically create a dedicated proxy group for this subscription source if not exists
-    const existingGroupNames = new Set(appConfig.proxyGroups.map(g => g.name.toLowerCase()));
-    const groupTag = `⚡️ ${sourceName}`;
-    if (!existingGroupNames.has(groupTag.toLowerCase()) && !existingGroupNames.has(sourceName.toLowerCase())) {
-      const newGroup: ProxyGroupItem = {
-        id: `grp-src-${Date.now()}`,
-        name: groupTag,
-        type: 'urltest',
-        use: [sourceName],
-        tolerance: 50,
-        interval: 300,
-        url: 'https://www.google.com/generate_204',
-      };
-      appConfig.proxyGroups.push(newGroup);
-
-      // Also add to '🚀 节点选择' if present
-      const mainSelector = appConfig.proxyGroups.find(g => g.name === '🚀 节点选择');
-      if (mainSelector) {
-        if (!mainSelector.proxies) mainSelector.proxies = [];
-        if (!mainSelector.proxies.includes(groupTag)) {
-          mainSelector.proxies.unshift(groupTag);
-        }
+    const mainSelector = appConfig.proxyGroups.find(g => g.name === '🚀 节点选择');
+    const groupTag = formatSourceGroupTag(newSource);
+    if (mainSelector) {
+      if (!mainSelector.proxies) mainSelector.proxies = [];
+      if (!mainSelector.proxies.includes(groupTag)) {
+        mainSelector.proxies.unshift(groupTag);
       }
     }
 
@@ -887,8 +1013,8 @@ app.put('/api/sources/:id', (req, res) => {
     return res.status(404).json({ success: false, message: 'Source not found' });
   }
   const oldSource = appConfig.sources[index];
-  const oldName = (oldSource.name || '').trim();
-  const newName = (req.body.name || '').trim();
+  const oldName = cleanSourceOrGroupName(oldSource.name || '');
+  const newName = cleanSourceOrGroupName(req.body.name || '');
 
   // If source name changed, synchronize nodes and all proxyGroups
   if (newName && newName !== oldName) {
@@ -898,38 +1024,25 @@ app.put('/api/sources/:id', (req, res) => {
       });
     }
 
-    const oldTag = oldName.startsWith('⚡️') ? oldName : `⚡️ ${oldName}`;
-    const newTag = newName.startsWith('⚡️') ? newName : `⚡️ ${newName}`;
+    const oldTag = formatSourceGroupTag(oldSource);
+    const newTag = formatSourceGroupTag({ ...oldSource, name: newName });
 
     // Synchronize proxy groups
     if (appConfig.proxyGroups) {
       appConfig.proxyGroups.forEach(grp => {
         const isSelfGroup = grp.id === `grp-src-${oldSource.id}` || 
-          (oldSource.id === 'custom' && (grp.id === 'grp-src-custom' || grp.name === '⚡️ 独立节点组' || grp.name === '独立节点组')) ||
-          grp.name === oldTag || 
-          grp.name === oldName;
+          (oldSource.id === 'custom' && (grp.id === 'grp-src-custom' || cleanSourceOrGroupName(grp.name) === '独立节点组' || cleanSourceOrGroupName(grp.name) === '自建节点')) ||
+          cleanSourceOrGroupName(grp.name).toLowerCase() === oldName.toLowerCase();
 
         if (isSelfGroup) {
           grp.name = newTag;
           grp.use = [newName];
         } else {
-          // If other groups reference the old name in use: [...]
           if (grp.use) {
-            grp.use = grp.use.map(u => {
-              if (u === oldName || u === oldTag || (oldSource.id === 'custom' && (u === '独立节点组' || u === '⚡️ 独立节点组'))) {
-                return newName;
-              }
-              return u;
-            });
+            grp.use = grp.use.map(u => (cleanSourceOrGroupName(u).toLowerCase() === oldName.toLowerCase() ? newName : u));
           }
-          // If other groups reference the old tag in proxies: [...]
           if (grp.proxies) {
-            grp.proxies = grp.proxies.map(p => {
-              if (p === oldTag || p === oldName || (oldSource.id === 'custom' && (p === '⚡️ 独立节点组' || p === '独立节点组'))) {
-                return newTag;
-              }
-              return p;
-            });
+            grp.proxies = grp.proxies.map(p => (cleanSourceOrGroupName(p).toLowerCase() === oldName.toLowerCase() ? newTag : p));
           }
         }
       });
@@ -938,6 +1051,7 @@ app.put('/api/sources/:id', (req, res) => {
 
   appConfig.sources[index] = { ...appConfig.sources[index], ...req.body };
   ensureCustomProxyGroup(appConfig);
+  ensureAllSourceProxyGroups(appConfig);
   saveConfig(appConfig);
   globalNodesCache = collectNodesFromSources(appConfig);
   res.json({ success: true, data: appConfig.sources[index], proxyGroups: appConfig.proxyGroups });
@@ -951,13 +1065,13 @@ app.delete('/api/sources/:id', (req, res) => {
   appConfig.sources = appConfig.sources.filter(s => s.id !== req.params.id);
 
   if (deletedSource) {
-    const sTag = deletedSource.name.startsWith('⚡️') ? deletedSource.name : `⚡️ ${deletedSource.name}`;
+    const sClean = cleanSourceOrGroupName(deletedSource.name).toLowerCase();
     appConfig.proxyGroups = (appConfig.proxyGroups || []).filter(g => 
-      g.id !== `grp-src-${deletedSource.id}` && g.name !== sTag && g.name !== deletedSource.name
+      g.id !== `grp-src-${deletedSource.id}` && cleanSourceOrGroupName(g.name).toLowerCase() !== sClean
     );
     appConfig.proxyGroups.forEach(grp => {
-      if (grp.use) grp.use = grp.use.filter(u => u !== deletedSource.name && u !== sTag);
-      if (grp.proxies) grp.proxies = grp.proxies.filter(p => p !== sTag && p !== deletedSource.name);
+      if (grp.use) grp.use = grp.use.filter(u => cleanSourceOrGroupName(u).toLowerCase() !== sClean);
+      if (grp.proxies) grp.proxies = grp.proxies.filter(p => cleanSourceOrGroupName(p).toLowerCase() !== sClean);
     });
   }
 
