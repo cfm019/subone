@@ -38,7 +38,19 @@ export async function fetchAndParseSource(
     });
 
     if (!response.ok) {
-      throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
+      let detail = '';
+      try {
+        const errText = await response.text();
+        if (errText) {
+          try {
+            const errJson = JSON.parse(errText);
+            detail = ` (${errJson.error || errJson.message || errText.slice(0, 150)})`;
+          } catch {
+            detail = ` (${errText.slice(0, 150).trim()})`;
+          }
+        }
+      } catch {}
+      throw new Error(`HTTP error ${response.status}: ${response.statusText}${detail}`);
     }
 
     const text = await response.text();
