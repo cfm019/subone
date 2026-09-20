@@ -654,11 +654,10 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                     return (
                       <span
                         key={idx}
-                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-xs border ${
-                          valid
+                        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md font-medium text-xs border ${valid
                             ? 'bg-[#FAF0EC] text-[#B85D3F] border-[#F3DDD3]'
                             : 'bg-[#FDF2F2] text-[#E02424] border-[#FBD5D5] ring-1 ring-[#E02424]/20'
-                        }`}
+                          }`}
                         title={valid ? undefined : '该节点在订阅与自建源中已不存在，保存或点击清理即可移除'}
                       >
                         <span>{p}</span>
@@ -805,7 +804,6 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
               <div className="space-y-1">
                 <div className="flex items-center justify-between">
                   <label className="font-semibold text-[#1F1E1D]">节点过滤正则 (可选)</label>
-                  <span className="text-[10px] text-[#9E9A91]">填入后按节点名称正则筛选（如国家/地区）</span>
                 </div>
                 <input
                   type="text"

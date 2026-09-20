@@ -127,14 +127,14 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
       try {
         const reg = new RegExp(filterIncludeRegex.trim(), 'i');
         candidates = candidates.filter(n => reg.test(n.name));
-      } catch {}
+      } catch { }
     }
 
     if (filterExcludeRegex.trim()) {
       try {
         const reg = new RegExp(filterExcludeRegex.trim(), 'i');
         candidates = candidates.filter(n => !reg.test(n.name));
-      } catch {}
+      } catch { }
     }
 
     return candidates;
@@ -422,29 +422,27 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
           const filteredNodes = currentSearch
             ? nodesList.filter(n =>
-                n.name.toLowerCase().includes(currentSearch) ||
-                n.server.toLowerCase().includes(currentSearch) ||
-                (n.type || '').toLowerCase().includes(currentSearch) ||
-                String(n.port).includes(currentSearch)
-              )
+              n.name.toLowerCase().includes(currentSearch) ||
+              n.server.toLowerCase().includes(currentSearch) ||
+              (n.type || '').toLowerCase().includes(currentSearch) ||
+              String(n.port).includes(currentSearch)
+            )
             : nodesList;
 
           return (
             <div
               key={source.id}
-              className={`rounded-2xl border transition-all duration-200 bg-white overflow-hidden shadow-2xs ${
-                source.enabled !== false
-                  ? isExpanded
-                    ? 'border-[#CC785C]/60 shadow-sm'
-                    : 'border-[#E3DDD2] hover:border-[#CC785C]/40'
-                  : 'border-[#E8E4DC] opacity-65 bg-[#FAF8F5]'
-              }`}
+              className={`rounded-2xl border transition-all duration-200 bg-white overflow-hidden shadow-2xs ${source.enabled !== false
+                ? isExpanded
+                  ? 'border-[#CC785C]/60 shadow-sm'
+                  : 'border-[#E3DDD2] hover:border-[#CC785C]/40'
+                : 'border-[#E8E4DC] opacity-65 bg-[#FAF8F5]'
+                }`}
             >
               {/* 卡片主横条 (Header) */}
               <div
-                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none transition-colors ${
-                  isExpanded ? 'bg-[#FCFAF7]' : 'hover:bg-[#FCFBF9]'
-                }`}
+                className={`p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer select-none transition-colors ${isExpanded ? 'bg-[#FCFAF7]' : 'hover:bg-[#FCFBF9]'
+                  }`}
                 onClick={() => toggleExpand(source.id)}
               >
                 {/* 左侧：类型徽章、名称、节点数、副标题 */}
@@ -452,9 +450,8 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   {/* 折叠展开箭头指示器 */}
                   <div className="mt-0.5 shrink-0 text-[#8C877D] hover:text-[#1F1E1D] transition-transform duration-200">
                     <ChevronDown
-                      className={`w-4 h-4 transition-transform duration-200 ${
-                        isExpanded ? 'rotate-180 text-[#CC785C]' : ''
-                      }`}
+                      className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-[#CC785C]' : ''
+                        }`}
                     />
                   </div>
 
@@ -825,7 +822,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 <input
                   type="text"
                   required
-                  placeholder="例如：极速机场 主力源"
+                  placeholder="例如：主力机场"
                   value={newNetworkName}
                   onChange={e => setNewNetworkName(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
@@ -994,7 +991,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   type="text"
                   required
                   autoFocus
-                  placeholder="例如：家庭内网 WireGuard、甲骨文VPS"
+                  placeholder="例如：VPS自建，好友专线"
                   value={newGroupNameInput}
                   onChange={e => setNewGroupNameInput(e.target.value)}
                   className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
@@ -1171,7 +1168,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   required
                   value={filterNameInput}
                   onChange={e => setFilterNameInput(e.target.value)}
-                  placeholder="例如: 朋友专线"
+                  placeholder="例如: AI优选"
                   className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
                 />
               </div>
@@ -1185,11 +1182,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   <button
                     type="button"
                     onClick={() => setFilterParentSources(['ALL'])}
-                    className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors cursor-pointer ${
-                      filterParentSources.includes('ALL') || filterParentSources.length === 0
-                        ? 'bg-[#CC785C] text-white shadow-2xs'
-                        : 'bg-white border border-[#E3DDD2] text-[#69655E] hover:bg-[#EFEAE2]'
-                    }`}
+                    className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors cursor-pointer ${filterParentSources.includes('ALL') || filterParentSources.length === 0
+                      ? 'bg-[#CC785C] text-white shadow-2xs'
+                      : 'bg-white border border-[#E3DDD2] text-[#69655E] hover:bg-[#EFEAE2]'
+                      }`}
                   >
                     全部来源 ({nodes?.length || 0})
                   </button>
@@ -1211,11 +1207,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                           }
                           setFilterParentSources(next);
                         }}
-                        className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${
-                          isSelected
-                            ? 'bg-[#CC785C] text-white shadow-2xs'
-                            : 'bg-white border border-[#E3DDD2] text-[#69655E] hover:bg-[#EFEAE2]'
-                        }`}
+                        className={`px-2.5 py-1 text-xs font-medium rounded-lg transition-colors cursor-pointer flex items-center gap-1.5 ${isSelected
+                          ? 'bg-[#CC785C] text-white shadow-2xs'
+                          : 'bg-white border border-[#E3DDD2] text-[#69655E] hover:bg-[#EFEAE2]'
+                          }`}
                       >
                         <span>{s.type === 'custom' || s.id === 'custom' ? '⭐' : '✈️'}</span>
                         <span>{s.name}</span>
