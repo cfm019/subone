@@ -8,15 +8,22 @@ export function nodeToEgernProxy(node: ProxyNode): any {
   return nodeToMihomoProxy(node);
 }
 
+export interface EgernGeneratorOptions {
+  expandNodes?: boolean;
+  baseUrl?: string;
+  subToken?: string;
+}
+
 export function generateEgernConfig(
   templateYaml: string,
   nodes: ProxyNode[],
   proxyGroups: ProxyGroupItem[] = [],
   rulesList: UnifiedRuleItem[] = [],
   sources: SubscriptionSource[] = [],
-  options?: { expandNodes?: boolean }
+  options?: EgernGeneratorOptions
 ): string {
   const expandNodes = Boolean(options?.expandNodes);
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !expandNodes);
   let doc: any;
   try {
     doc = yaml.load(templateYaml);
@@ -42,9 +49,17 @@ export function generateEgernConfig(
   const networkSourceIds = new Set(
     sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http')).map(s => s.id)
   );
-  const nodesToWrite = expandNodes
-    ? allCandidateNodes
-    : allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
+
+  let nodesToWrite: ProxyNode[] = [];
+  if (expandNodes) {
+    nodesToWrite = allCandidateNodes;
+  } else if (!hasSuboneRemoteSubscription) {
+    nodesToWrite = allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
+  } else {
+    // 订阅化模式：由 sources 接管自建源
+    nodesToWrite = [];
+  }
+
   const egernProxies = nodesToWrite.map(nodeToEgernProxy);
 
   doc = injectUnifiedToEgern(doc, egernProxies, nodes, proxyGroups, rulesList, sources, options);

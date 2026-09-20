@@ -146,15 +146,22 @@ export function nodeToQuantumultXProxy(node: ProxyNode): string {
   return `# Unsupported on Quantumult X (${node.type.toUpperCase()}): ${tag}`;
 }
 
+export interface QuantumultXGeneratorOptions {
+  expandNodes?: boolean;
+  baseUrl?: string;
+  subToken?: string;
+}
+
 export function generateQuantumultXConfig(
   templateConf: string,
   nodes: ProxyNode[],
   proxyGroups: ProxyGroupItem[] = [],
   rulesList: UnifiedRuleItem[] = [],
   sources: SubscriptionSource[] = [],
-  options?: { expandNodes?: boolean }
+  options?: QuantumultXGeneratorOptions
 ): string {
   const expandNodes = Boolean(options?.expandNodes);
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !expandNodes);
   const lines = templateConf.split('\n');
   const resultLines: string[] = [];
 
@@ -172,9 +179,17 @@ export function generateQuantumultXConfig(
   const networkSourceIds = new Set(
     sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http')).map(s => s.id)
   );
-  const nodesToWrite = expandNodes
-    ? allCandidateNodes
-    : allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
+
+  let nodesToWrite: ProxyNode[] = [];
+  if (expandNodes) {
+    nodesToWrite = allCandidateNodes;
+  } else if (!hasSuboneRemoteSubscription) {
+    nodesToWrite = allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
+  } else {
+    // 订阅化模式：由 server_remote 接管自建源
+    nodesToWrite = [];
+  }
+
   const generatedProxyLines = nodesToWrite.map(nodeToQuantumultXProxy);
 
   let inServerLocal = false;

@@ -42,26 +42,31 @@ export function injectUnifiedToMihomo(
   nodes: ProxyNode[],
   proxyGroups: ProxyGroupItem[],
   rulesList: UnifiedRuleItem[],
-  sources: SubscriptionSource[] = []
+  sources: SubscriptionSource[] = [],
+  options?: { expandNodes?: boolean; baseUrl?: string; subToken?: string }
 ): any {
 
   if (!doc || typeof doc !== 'object') doc = {};
 
-  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
+  const internalSources = sources.filter(s => s.enabled && !networkSources.some(ns => ns.id === s.id));
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !options?.expandNodes);
 
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const customNodeNames = customNodes.map(n => n.name);
   const allNodeNames = nodes.map(n => n.name);
 
-  // 1. Inject Proxy Providers for network subscriptions
-  if (networkSources.length > 0) {
+  // 1. Inject Proxy Providers for network subscriptions and internal sources
+  const allActiveRemoteSources: SubscriptionSource[] = [];
+
+  if (!options?.expandNodes) {
     if (!doc['proxy-providers'] || typeof doc['proxy-providers'] !== 'object') {
       doc['proxy-providers'] = {};
     }
+
+    // 外部机场源
     networkSources.forEach(s => {
       const providerKey = s.name.trim();
-      // Only sanitize characters truly illegal in cross-platform file paths (\ / : * ? " < > | \r \n \t)
-      // Preserves Chinese, Unicode, alphanumeric characters, hyphens, and underscores safely.
       const safePathName = providerKey
         .replace(/^[⚡️🚀👉♻️🌐📹✈️🤖🇨🇳🇭🇰🇯🇵🇺🇸🏮🇸🇬\s]+/u, '')
         .replace(/[\\/:*?"<>|\r\n\t]/g, '_')
@@ -79,10 +84,38 @@ export function injectUnifiedToMihomo(
           interval: 300,
         },
       };
+      allActiveRemoteSources.push(s);
     });
+
+    // 内部自建/过滤/独立源转为 proxy-provider
+    if (hasSuboneRemoteSubscription && options?.baseUrl && options?.subToken) {
+      const cleanBaseUrl = options.baseUrl.replace(/\/+$/, '');
+      const token = encodeURIComponent(options.subToken);
+      internalSources.forEach(s => {
+        const providerKey = s.name.trim();
+        const safePathName = providerKey
+          .replace(/^[⚡️🚀👉♻️🌐📹✈️🤖🇨🇳🇭🇰🇯🇵🇺🇸🏮🇸🇬\s]+/u, '')
+          .replace(/[\\/:*?"<>|\r\n\t]/g, '_')
+          .replace(/\.{2,}/g, '_')
+          .trim() || s.id || 'provider';
+
+        doc['proxy-providers'][providerKey] = {
+          type: 'http',
+          url: `${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=mihomo`,
+          interval: 86400,
+          path: `./proxy_providers/${safePathName}.yaml`,
+          'health-check': {
+            enable: true,
+            url: 'https://www.google.com/generate_204',
+            interval: 300,
+          },
+        };
+        allActiveRemoteSources.push(s);
+      });
+    }
   }
 
-  const allProviderNames = networkSources.map(s => s.name.trim());
+  const allProviderNames = allActiveRemoteSources.map(s => s.name.trim());
 
   // 2. Build Proxy Groups
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
@@ -183,8 +216,7 @@ export function injectUnifiedToMihomo(
       if (allProviderNames.length > 0) {
         grpObj.use = grp.use && grp.use.length > 0 ? grp.use : allProviderNames;
       }
-      if (customNodeNames.length > 0) {
-        // Also include any custom nodes that might match or direct proxies
+      if (!hasSuboneRemoteSubscription && customNodeNames.length > 0) {
         grpObj.proxies = customNodeNames;
       } else if (!grpObj.use || grpObj.use.length === 0) {
         grpObj.proxies = ['DIRECT'];
@@ -193,20 +225,34 @@ export function injectUnifiedToMihomo(
       return;
     }
 
-    // Custom dedicated node group
+    // Custom dedicated node group or dedicated source group
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    const isCustomGrp = grp.id === 'grp-src-custom' ||
-      cleanName === '自建节点' ||
-      cleanName === '独立节点组' ||
-      cleanName === 'custom' ||
-      cleanName === '手工自建' ||
-      customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+    const matchedProvider = allProviderNames.find(p => {
+      const cleanP = p.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+      return cleanP === cleanName || p.toLowerCase() === cleanName;
+    });
 
-    if (isCustomGrp) {
-      grpObj.proxies = customNodeNames.length > 0 ? customNodeNames : ['DIRECT'];
-      delete grpObj.use;
+    if (matchedProvider) {
+      grpObj.use = [matchedProvider];
+      delete grpObj.proxies;
       generatedGroups.push(grpObj);
       return;
+    }
+
+    if (!hasSuboneRemoteSubscription) {
+      const isCustomGrp = grp.id === 'grp-src-custom' ||
+        cleanName === '自建节点' ||
+        cleanName === '独立节点组' ||
+        cleanName === 'custom' ||
+        cleanName === '手工自建' ||
+        customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+
+      if (isCustomGrp) {
+        grpObj.proxies = customNodeNames.length > 0 ? customNodeNames : ['DIRECT'];
+        delete grpObj.use;
+        generatedGroups.push(grpObj);
+        return;
+      }
     }
 
     // Selector / General groups
@@ -218,7 +264,7 @@ export function injectUnifiedToMihomo(
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
         const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
-        if (isCustomU) {
+        if (!hasSuboneRemoteSubscription && isCustomU) {
           if (validGroupNames.has(customTagName)) {
             combinedProxies.add(customTagName);
           }
@@ -230,7 +276,7 @@ export function injectUnifiedToMihomo(
           const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
           return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
         });
-        if (matchedSource && (matchedSource.type === 'filter' || !matchedSource.url || !matchedSource.url.startsWith('http'))) {
+        if (matchedSource && !allProviderNames.includes(matchedSource.name.trim())) {
           if (Array.isArray(matchedSource.nodes)) {
             matchedSource.nodes.forEach(n => combinedProxies.add(n.name));
           }
@@ -256,11 +302,11 @@ export function injectUnifiedToMihomo(
     }
 
     // Add custom nodes or fallback
-    if (grp.name === '👉 手动选择' || (combinedProxies.size === 0 && !grpObj.use)) {
+    if (!hasSuboneRemoteSubscription && (grp.name === '👉 手动选择' || (combinedProxies.size === 0 && !grpObj.use))) {
       customNodeNames.forEach(name => combinedProxies.add(name));
     }
 
-    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && validGroupNames.has(customTagName)) {
+    if (!hasSuboneRemoteSubscription && grp.name === '🚀 节点选择' && customNodes.length > 0 && validGroupNames.has(customTagName)) {
       combinedProxies.add(customTagName);
     }
 
@@ -943,7 +989,7 @@ export function injectUnifiedToLoon(
   proxyGroups: ProxyGroupItem[],
   rulesList: UnifiedRuleItem[],
   sources: SubscriptionSource[] = [],
-  options?: { expandNodes?: boolean }
+  options?: { expandNodes?: boolean; baseUrl?: string; subToken?: string }
 ): string {
   const expandNodes = Boolean(options?.expandNodes);
   const lines = templateMcf.split('\n');
@@ -993,7 +1039,10 @@ export function injectUnifiedToLoon(
     });
   }
 
-  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
+  const internalSources = sources.filter(s => s.enabled && !networkSources.some(ns => ns.id === s.id));
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !expandNodes);
+
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const customNodeNames = customNodes.map(n => n.name.replace(/[=,]/g, '_'));
   const allNodeNames = nodes.map(n => n.name.replace(/[=,]/g, '_'));
@@ -1013,16 +1062,32 @@ export function injectUnifiedToLoon(
 
   // 1. Build [Remote Proxy] (Loon native remote subscriptions)
   const remoteProxyLines: string[] = [];
+  const allActiveRemoteSources: SubscriptionSource[] = [];
+
   if (!expandNodes) {
+    // 外部机场订阅：保持原样直连链接
     networkSources.forEach(s => {
       const tag = s.name.replace(/[=,]/g, '_').trim();
       remoteProxyLines.push(`${tag} = ${s.url}, udp=true, fast-open=default, skip-cert-verify=true, enabled=true`);
+      allActiveRemoteSources.push(s);
     });
+
+    // 内部自建/过滤/独立源：若有 baseUrl 与 subToken，生成指向 Subone 自身的独立订阅
+    if (hasSuboneRemoteSubscription && options?.baseUrl && options?.subToken) {
+      const cleanBaseUrl = options.baseUrl.replace(/\/+$/, '');
+      const token = encodeURIComponent(options.subToken);
+      internalSources.forEach(s => {
+        const tag = s.name.replace(/[=,]/g, '_').trim();
+        const subUrl = `${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=loon`;
+        remoteProxyLines.push(`${tag} = ${subUrl}, udp=true, fast-open=default, skip-cert-verify=true, enabled=true`);
+        allActiveRemoteSources.push(s);
+      });
+    }
   }
 
   // 2. Build [Remote Filter] (Regex / region filters for subscription nodes)
   const filterMap = new Map<string, string>();
-  if (!expandNodes && networkSources.length > 0) {
+  if (!expandNodes && allActiveRemoteSources.length > 0) {
     effectiveGroups.forEach(grp => {
       if (grp.filter) {
         const filterTag = getLoonFilterTag(grp);
@@ -1039,17 +1104,19 @@ export function injectUnifiedToLoon(
 
   // 3. Build [Proxy Group]
   const sourceGroupTags: string[] = [];
-  networkSources.forEach(s => {
+  allActiveRemoteSources.forEach(s => {
     const tag = s.name.replace(/[=,]/g, '_').trim();
     sourceGroupTags.push(tag.startsWith('⚡️') ? tag : `⚡️ ${tag}`);
   });
-  if (customSources.length > 0) {
-    customSources.forEach(cs => {
-      const tag = cs.name.replace(/[=,]/g, '_').trim();
-      sourceGroupTags.push(tag.startsWith('⚡️') ? tag : `⚡️ ${tag}`);
-    });
-  } else if (customNodes.length > 0) {
-    sourceGroupTags.push('⚡️ 自建节点');
+  if (!hasSuboneRemoteSubscription) {
+    if (customSources.length > 0) {
+      customSources.forEach(cs => {
+        const tag = cs.name.replace(/[=,]/g, '_').trim();
+        sourceGroupTags.push(tag.startsWith('⚡️') ? tag : `⚡️ ${tag}`);
+      });
+    } else if (customNodes.length > 0) {
+      sourceGroupTags.push('⚡️ 自建节点');
+    }
   }
 
   const existingGroupNames = new Set(effectiveGroups.map(g => g.name.toLowerCase()));
@@ -1084,10 +1151,11 @@ export function injectUnifiedToLoon(
       } else {
         const filterTag = getLoonFilterTag(grp);
         const members: string[] = [];
-        if (networkSources.length > 0) {
+        if (allActiveRemoteSources.length > 0) {
           members.push(filterTag);
         }
-        if (matched.length > 0) {
+        // 仅在自建节点未订阅化时，将匹配的静态节点补充入列表
+        if (!hasSuboneRemoteSubscription && matched.length > 0) {
           members.push(...matched);
         }
         if (members.length === 0) {
@@ -1101,7 +1169,7 @@ export function injectUnifiedToLoon(
     if (grp.name === '♻️ 自动选择') {
       const members = expandNodes
         ? (allNodeNames.length > 0 ? allNodeNames : ['DIRECT'])
-        : (networkSources.length > 0 ? ['全部节点', ...customNodeNames] : (customNodeNames.length > 0 ? customNodeNames : ['DIRECT']));
+        : (allActiveRemoteSources.length > 0 ? ['全部节点'] : (customNodeNames.length > 0 ? customNodeNames : ['DIRECT']));
       groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=${grp.url || 'https://www.google.com/generate_204'}, interval=300, tolerance=${grp.tolerance || 50}`);
       return;
     }
@@ -1109,14 +1177,18 @@ export function injectUnifiedToLoon(
     if (grp.name === '👉 手动选择') {
       const members = expandNodes
         ? (allNodeNames.length > 0 ? allNodeNames : ['DIRECT'])
-        : (networkSources.length > 0 ? ['全部节点', ...customNodeNames] : (customNodeNames.length > 0 ? customNodeNames : ['DIRECT']));
+        : (allActiveRemoteSources.length > 0 ? ['全部节点'] : (customNodeNames.length > 0 ? customNodeNames : ['DIRECT']));
       groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
       return;
     }
 
-    // Match dedicated source group (e.g. ⚡️ MESL)
+    // Match dedicated source group (e.g. ⚡️ MESL, ⚡️ HK优选组)
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    const matchedSource = networkSources.find(s => s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase() === cleanName);
+    const matchedSource = allActiveRemoteSources.find(s => {
+      const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+      return sClean === cleanName || s.id.toLowerCase() === cleanName;
+    });
+
     if (matchedSource) {
       if (expandNodes) {
         const srcNodes = nodes
@@ -1140,11 +1212,13 @@ export function injectUnifiedToLoon(
       return;
     }
 
-    const isCustomGrp = grp.id === 'grp-src-custom' || cleanName === '自建节点' || cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
-    if (isCustomGrp) {
-      const members = customNodeNames.length > 0 ? customNodeNames : ['DIRECT'];
-      groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
-      return;
+    if (!hasSuboneRemoteSubscription) {
+      const isCustomGrp = grp.id === 'grp-src-custom' || cleanName === '自建节点' || cleanName === '独立节点组' || cleanName === 'custom' || cleanName === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+      if (isCustomGrp) {
+        const members = customNodeNames.length > 0 ? customNodeNames : ['DIRECT'];
+        groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
+        return;
+      }
     }
 
     // Standard selector group with proxies list (e.g. 🚀 节点选择, 🤖 AI 服务, 📹 YouTube, 🌐 Google, etc.)
@@ -1159,8 +1233,7 @@ export function injectUnifiedToLoon(
       });
     }
 
-    // Support grp.use: ['自建'] or ['⚡️ 自建'] or ['MESL']
-    // Support grp.use: ['自建'] or ['⚡️ 自建'] or ['MESL'] or ['HK优选']
+    // Support grp.use: ['自建'] or ['⚡️ 自建'] or ['MESL'] or ['HK优选组']
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
@@ -1171,17 +1244,19 @@ export function injectUnifiedToLoon(
           return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
         });
 
-        const isNetSrc = Boolean(
+        const isRemoteActive = Boolean(
           matchedSource &&
-          matchedSource.type !== 'filter' &&
-          matchedSource.type !== 'custom' &&
-          matchedSource.url &&
-          matchedSource.url.startsWith('http') &&
-          networkSources.some(ns => ns.id === matchedSource.id)
+          allActiveRemoteSources.some(as => as.id === matchedSource.id)
         );
 
-        if (expandNodes || !isNetSrc) {
-          // Local/custom/filter source: expand its nodes directly
+        if (!expandNodes && isRemoteActive && matchedSource) {
+          // 远程订阅源（含机场源及订阅化自建源）：直接引用对应 Tag
+          const sTag = matchedSource.name.replace(/[=,]/g, '_').trim();
+          if (!proxies.includes(sTag)) {
+            proxies.push(sTag);
+          }
+        } else if (expandNodes || !isRemoteActive) {
+          // 节点直接展开模式或未订阅化的自建节点
           let srcNodeList: string[] = [];
           if (matchedSource && Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
             srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
@@ -1198,16 +1273,10 @@ export function injectUnifiedToLoon(
             if (!proxies.includes(m)) proxies.push(m);
           });
 
-          if (isCustom && customNodeNames.length > 0) {
+          if (isCustom && customNodeNames.length > 0 && !hasSuboneRemoteSubscription) {
             customNodeNames.forEach(m => {
               if (!proxies.includes(m)) proxies.push(m);
             });
-          }
-        } else if (matchedSource) {
-          // Remote HTTP subscription: reference tag directly
-          const sTag = matchedSource.name.replace(/[=,]/g, '_').trim();
-          if (!proxies.includes(sTag)) {
-            proxies.push(sTag);
           }
         }
 
@@ -1232,8 +1301,8 @@ export function injectUnifiedToLoon(
     });
     const validSubTags = new Set([
       ...sourceGroupTags,
-      ...networkSources.map(s => s.name.replace(/[=,]/g, '_').trim()),
-      ...networkSources.map(s => s.name.replace(/[=,]/g, '_').trim().replace(/^[⚡️\s]+/, ''))
+      ...allActiveRemoteSources.map(s => s.name.replace(/[=,]/g, '_').trim()),
+      ...allActiveRemoteSources.map(s => s.name.replace(/[=,]/g, '_').trim().replace(/^[⚡️\s]+/, ''))
     ]);
     const isBuiltinLoonProxy = (t: string) => {
       const upper = t.trim().toUpperCase();
@@ -1260,7 +1329,8 @@ export function injectUnifiedToLoon(
   });
 
 
-  if (customNodes.length > 0 && !effectiveGroups.some(g => g.id === 'grp-src-custom' || g.name.includes('自建') || g.name.includes('独立'))) {
+
+  if (!hasSuboneRemoteSubscription && customNodes.length > 0 && !effectiveGroups.some(g => g.id === 'grp-src-custom' || g.name.includes('自建') || g.name.includes('独立'))) {
     const customTagName = customSources[0]?.name ? `⚡️ ${customSources[0].name}` : '⚡️ 自建节点';
     groupLines.push(`${customTagName} = select, ${customNodeNames.join(', ')}`);
   }
@@ -1404,7 +1474,7 @@ export function injectUnifiedToQuantumultX(
   proxyGroups: ProxyGroupItem[],
   rulesList: UnifiedRuleItem[],
   sources: SubscriptionSource[] = [],
-  options?: { expandNodes?: boolean }
+  options?: { expandNodes?: boolean; baseUrl?: string; subToken?: string }
 ): string {
   const expandNodes = Boolean(options?.expandNodes);
   const lines = templateConf.split('\n');
@@ -1418,7 +1488,10 @@ export function injectUnifiedToQuantumultX(
     use: g.use ? [...g.use] : undefined,
   }));
 
-  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
+  const internalSources = sources.filter(s => s.enabled && !networkSources.some(ns => ns.id === s.id));
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !expandNodes);
+
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
   const qxSupportedNodes = nodes.filter(isSupportedByQuantumultX);
   const qxSupportedCustomNodes = customNodes.filter(isSupportedByQuantumultX);
@@ -1463,12 +1536,27 @@ export function injectUnifiedToQuantumultX(
 
   // 1. Build [server_remote]
   const serverRemoteLines: string[] = [];
+  const allActiveRemoteSources: SubscriptionSource[] = [];
+
   if (!expandNodes) {
     networkSources.forEach(s => {
       const tag = s.name.replace(/[=,]/g, '_').trim();
       serverRemoteLines.push(`${s.url}, tag=${tag}, update-interval=24, opt-parser=true`);
+      allActiveRemoteSources.push(s);
     });
+
+    if (hasSuboneRemoteSubscription && options?.baseUrl && options?.subToken) {
+      const cleanBaseUrl = options.baseUrl.replace(/\/+$/, '');
+      const token = encodeURIComponent(options.subToken);
+      internalSources.forEach(s => {
+        const tag = s.name.replace(/[=,]/g, '_').trim();
+        serverRemoteLines.push(`${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=quantumultx, tag=${tag}, update-interval=24, opt-parser=true`);
+        allActiveRemoteSources.push(s);
+      });
+    }
   }
+
+  const allRemoteTags = new Set(allActiveRemoteSources.map(s => s.name.replace(/[=,]/g, '_').trim()));
 
   // 2. Build [policy]
   const validGroupNames = new Set(effectiveGroups.map(g => g.name));
@@ -1521,30 +1609,48 @@ export function injectUnifiedToQuantumultX(
     if (grp.name === '👉 手动选择') {
       const members = expandNodes
         ? (allNodeNames.length > 0 ? allNodeNames : ['direct'])
-        : ['direct', ...customNodeNames];
+        : (hasSuboneRemoteSubscription ? Array.from(allRemoteTags) : ['direct', ...customNodeNames]);
       groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
       return;
     }
 
-    // Dedicated custom node group
+    // Match dedicated remote source group
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    const isCustomGrp = grp.id === 'grp-src-custom' ||
-      cleanName === '自建节点' ||
-      cleanName === '独立节点组' ||
-      cleanName === 'custom' ||
-      cleanName === '手工自建' ||
-      customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+    const matchedRemote = allActiveRemoteSources.find(s => {
+      const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+      return sClean === cleanName || s.id.toLowerCase() === cleanName;
+    });
 
-    if (isCustomGrp) {
-      const members = customNodeNames.length > 0 ? customNodeNames : ['direct'];
-      groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
+    if (matchedRemote && !expandNodes) {
+      const sTag = matchedRemote.name.replace(/[=,]/g, '_').trim();
+      const groupType = grp.type === 'urltest' ? 'url-latency-benchmark' : 'static';
+      if (groupType === 'url-latency-benchmark') {
+        groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=.*, check-interval=300, tolerance=${grp.tolerance || 50}`);
+      } else {
+        groupLines.push(`static=${grp.name}, ${sTag}, direct`);
+      }
       return;
+    }
+
+    if (!hasSuboneRemoteSubscription) {
+      const isCustomGrp = grp.id === 'grp-src-custom' ||
+        cleanName === '自建节点' ||
+        cleanName === '独立节点组' ||
+        cleanName === 'custom' ||
+        cleanName === '手工自建' ||
+        customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+
+      if (isCustomGrp) {
+        const members = customNodeNames.length > 0 ? customNodeNames : ['direct'];
+        groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
+        return;
+      }
     }
 
     // Standard selector group
     let proxies = grp.proxies ? [...grp.proxies] : [];
 
-    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes(customTagName)) {
+    if (!hasSuboneRemoteSubscription && grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes(customTagName)) {
       proxies.unshift(customTagName);
     }
 
@@ -1552,20 +1658,28 @@ export function injectUnifiedToQuantumultX(
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
         const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
-        if (isCustomU) {
-          if (validGroupNames.has(customTagName) && !proxies.includes(customTagName)) {
-            proxies.unshift(customTagName);
+        const matchedSource = sources.find(s => {
+          const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+          return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+        });
+
+        if (!expandNodes && matchedSource && allRemoteTags.has(matchedSource.name.replace(/[=,]/g, '_').trim())) {
+          const sTag = matchedSource.name.replace(/[=,]/g, '_').trim();
+          if (!proxies.includes(sTag)) {
+            proxies.push(sTag);
           }
-          customNodeNames.forEach(m => {
-            if (!proxies.includes(m)) proxies.push(m);
-          });
-        } else {
-          const matchedSource = sources.find(s => {
-            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
-          });
+        } else if (isCustomU) {
+          if (!hasSuboneRemoteSubscription) {
+            if (validGroupNames.has(customTagName) && !proxies.includes(customTagName)) {
+              proxies.unshift(customTagName);
+            }
+            customNodeNames.forEach(m => {
+              if (!proxies.includes(m)) proxies.push(m);
+            });
+          }
+        } else if (matchedSource) {
           let srcNodeList: string[] = [];
-          if (matchedSource && Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
+          if (Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
             srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
           } else {
             srcNodeList = nodes.filter(n => {
@@ -1594,7 +1708,7 @@ export function injectUnifiedToQuantumultX(
       return p.trim();
     }).filter(p => {
       if (!p || p === grp.name) return false;
-      return validGroupNames.has(p) || validNodeNames.has(p) || p === 'direct' || p === 'reject';
+      return validGroupNames.has(p) || validNodeNames.has(p) || allRemoteTags.has(p) || p === 'direct' || p === 'reject';
     });
 
     if (proxies.length === 0) proxies = ['direct'];
@@ -1701,15 +1815,51 @@ export function injectUnifiedToEgern(
   proxyGroups: ProxyGroupItem[],
   rulesList: UnifiedRuleItem[],
   sources: SubscriptionSource[] = [],
-  options?: { expandNodes?: boolean }
+  options?: { expandNodes?: boolean; baseUrl?: string; subToken?: string }
 ): any {
   if (!doc || typeof doc !== 'object') doc = {};
 
   doc.proxies = egernProxies;
 
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
+  const internalSources = sources.filter(s => s.enabled && !networkSources.some(ns => ns.id === s.id));
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !options?.expandNodes);
+
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
   const customNodeNames = customNodes.map(n => n.name);
   const allNodeNames = nodes.map(n => n.name);
+
+  // 1. Build sources
+  const allActiveRemoteSources: SubscriptionSource[] = [];
+  if (!options?.expandNodes) {
+    if (!Array.isArray(doc.sources)) {
+      doc.sources = [];
+    }
+
+    networkSources.forEach(s => {
+      doc.sources.push({
+        name: s.name.trim(),
+        type: 'http',
+        url: s.url,
+      });
+      allActiveRemoteSources.push(s);
+    });
+
+    if (hasSuboneRemoteSubscription && options?.baseUrl && options?.subToken) {
+      const cleanBaseUrl = options.baseUrl.replace(/\/+$/, '');
+      const token = encodeURIComponent(options.subToken);
+      internalSources.forEach(s => {
+        doc.sources.push({
+          name: s.name.trim(),
+          type: 'http',
+          url: `${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=egern`,
+        });
+        allActiveRemoteSources.push(s);
+      });
+    }
+  }
+
+  const allSourceNames = allActiveRemoteSources.map(s => s.name.trim());
 
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
   const customTagName = customSources[0]?.name
@@ -1776,102 +1926,137 @@ export function injectUnifiedToEgern(
 
     if (grp.filter) {
       const cleanFilter = grp.filter.trim().replace(/^\(\?i\)/i, '').replace(/\(\?i\)/gi, '');
-      let matched: string[] = [];
-      try {
-        const reg = new RegExp(cleanFilter, 'i');
-        matched = allNodeNames.filter(n => reg.test(n));
-      } catch {
-        matched = [];
-      }
-      const proxies = matched.length > 0 ? matched : ['DIRECT'];
-      generatedGroups.push({
+      const grpObj: any = {
         name: grp.name,
         type: groupType,
         url: grp.url || 'https://www.google.com/generate_204',
         interval: grp.interval || 300,
         tolerance: grp.tolerance || 50,
-        proxies,
-      });
+      };
+
+      if (allSourceNames.length > 0) {
+        grpObj['filter-sources'] = allSourceNames;
+        grpObj.filter = cleanFilter;
+      }
+      if (!hasSuboneRemoteSubscription && customNodeNames.length > 0) {
+        grpObj.proxies = customNodeNames;
+      } else if (!grpObj['filter-sources']) {
+        grpObj.proxies = ['DIRECT'];
+      }
+      generatedGroups.push(grpObj);
       return;
     }
 
     if (grp.name === '♻️ 自动选择') {
-      generatedGroups.push({
+      const grpObj: any = {
         name: grp.name,
         type: 'url-test',
         url: grp.url || 'https://www.google.com/generate_204',
         interval: 300,
         tolerance: 50,
-        proxies: allNodeNames.length > 0 ? allNodeNames : ['DIRECT'],
-      });
+      };
+      if (allSourceNames.length > 0) {
+        grpObj['filter-sources'] = allSourceNames;
+      } else {
+        grpObj.proxies = allNodeNames.length > 0 ? allNodeNames : ['DIRECT'];
+      }
+      generatedGroups.push(grpObj);
       return;
     }
 
     if (grp.name === '👉 手动选择') {
-      generatedGroups.push({
+      const grpObj: any = {
         name: grp.name,
         type: 'select',
-        proxies: allNodeNames.length > 0 ? allNodeNames : ['DIRECT'],
-      });
+      };
+      if (allSourceNames.length > 0) {
+        grpObj['filter-sources'] = allSourceNames;
+      } else {
+        grpObj.proxies = allNodeNames.length > 0 ? allNodeNames : ['DIRECT'];
+      }
+      generatedGroups.push(grpObj);
       return;
     }
 
     const cleanName = grp.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-    const isCustomGrp = grp.id === 'grp-src-custom' ||
-      cleanName === '自建节点' ||
-      cleanName === '独立节点组' ||
-      cleanName === 'custom' ||
-      cleanName === '手工自建' ||
-      customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+    const matchedSource = allActiveRemoteSources.find(s => {
+      const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+      return sClean === cleanName || s.id.toLowerCase() === cleanName;
+    });
 
-    if (isCustomGrp) {
+    if (matchedSource && !options?.expandNodes) {
       generatedGroups.push({
         name: grp.name,
-        type: 'select',
-        proxies: customNodeNames.length > 0 ? customNodeNames : ['DIRECT'],
+        type: groupType,
+        'filter-sources': [matchedSource.name.trim()],
       });
       return;
     }
 
+    if (!hasSuboneRemoteSubscription) {
+      const isCustomGrp = grp.id === 'grp-src-custom' ||
+        cleanName === '自建节点' ||
+        cleanName === '独立节点组' ||
+        cleanName === 'custom' ||
+        cleanName === '手工自建' ||
+        customSources.some(cs => cs.name.trim().toLowerCase() === cleanName);
+
+      if (isCustomGrp) {
+        generatedGroups.push({
+          name: grp.name,
+          type: 'select',
+          proxies: customNodeNames.length > 0 ? customNodeNames : ['DIRECT'],
+        });
+        return;
+      }
+    }
+
     let proxies = grp.proxies ? [...grp.proxies] : [];
-    if (grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes(customTagName)) {
+    if (!hasSuboneRemoteSubscription && grp.name === '🚀 节点选择' && customNodes.length > 0 && !proxies.includes(customTagName)) {
       proxies.unshift(customTagName);
     }
+
+    let filterSourcesForGroup: string[] = [];
 
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
         const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-        const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
-        if (isCustomU) {
-          if (validGroupNames.has(customTagName) && !proxies.includes(customTagName)) {
-            proxies.unshift(customTagName);
-          }
-          customNodeNames.forEach(m => {
-            if (!proxies.includes(m)) proxies.push(m);
-          });
+        const matchedSource = allActiveRemoteSources.find(s => {
+          const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+          return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+        });
+
+        if (!options?.expandNodes && matchedSource && allSourceNames.includes(matchedSource.name.trim())) {
+          filterSourcesForGroup.push(matchedSource.name.trim());
         } else {
-          const matchedSource = sources.find(s => {
-            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
-          });
-          let srcNodeList: string[] = [];
-          if (matchedSource && Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
-            srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
-          } else {
-            srcNodeList = nodes.filter(n => {
-              const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
-              const sId = (n.sourceId || '').trim().toLowerCase();
-              return sName === cleanU || sId === cleanU;
-            }).map(n => n.name.replace(/[=,]/g, '_'));
-          }
-          srcNodeList.forEach(m => {
-            if (!proxies.includes(m)) proxies.push(m);
-          });
-          const grpTag = u.startsWith('⚡️') ? u : `⚡️ ${u}`;
-          if (validGroupNames.has(grpTag) && !proxies.includes(grpTag)) {
-            proxies.push(grpTag);
-          } else if (validGroupNames.has(u) && !proxies.includes(u)) {
-            proxies.push(u);
+          const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cs.name.trim().toLowerCase() === cleanU);
+          if (!hasSuboneRemoteSubscription && isCustomU) {
+            if (validGroupNames.has(customTagName) && !proxies.includes(customTagName)) {
+              proxies.unshift(customTagName);
+            }
+            customNodeNames.forEach(m => {
+              if (!proxies.includes(m)) proxies.push(m);
+            });
+          } else if (matchedSource) {
+            let srcNodeList: string[] = [];
+            if (Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
+              srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
+            } else {
+              srcNodeList = nodes.filter(n => {
+                const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+                const sId = (n.sourceId || '').trim().toLowerCase();
+                return sName === cleanU || sId === cleanU;
+              }).map(n => n.name.replace(/[=,]/g, '_'));
+            }
+            srcNodeList.forEach(m => {
+              if (!proxies.includes(m)) proxies.push(m);
+            });
+            const grpTag = u.startsWith('⚡️') ? u : `⚡️ ${u}`;
+            if (validGroupNames.has(grpTag) && !proxies.includes(grpTag)) {
+              proxies.push(grpTag);
+            } else if (validGroupNames.has(u) && !proxies.includes(u)) {
+              proxies.push(u);
+            }
           }
         }
       });
@@ -1882,16 +2067,24 @@ export function injectUnifiedToEgern(
       return validGroupNames.has(p) || validNodeNames.has(p) || p === 'DIRECT' || p === 'REJECT';
     });
 
-    if (proxies.length === 0) proxies = ['DIRECT'];
-
-    generatedGroups.push({
+    const grpObj: any = {
       name: grp.name,
       type: groupType,
-      proxies,
-      url: (groupType === 'url-test' || groupType === 'fallback') ? (grp.url || 'https://www.google.com/generate_204') : undefined,
-      interval: (groupType === 'url-test' || groupType === 'fallback') ? (grp.interval || 300) : undefined,
-      tolerance: groupType === 'url-test' ? (grp.tolerance || 50) : undefined,
-    });
+    };
+    if (groupType === 'url-test' || groupType === 'fallback') {
+      if (grp.url) grpObj.url = grp.url;
+      if (grp.interval) grpObj.interval = grp.interval;
+      if (groupType === 'url-test' && grp.tolerance) grpObj.tolerance = grp.tolerance;
+    }
+    if (filterSourcesForGroup.length > 0) {
+      grpObj['filter-sources'] = filterSourcesForGroup;
+    }
+    if (proxies.length > 0) {
+      grpObj.proxies = proxies;
+    } else if (filterSourcesForGroup.length === 0) {
+      grpObj.proxies = ['DIRECT'];
+    }
+    generatedGroups.push(grpObj);
   });
 
   doc['proxy-groups'] = generatedGroups;

@@ -181,19 +181,25 @@ export function nodeToLoonProxy(node: ProxyNode): string {
   return `# Unsupported node: ${name}`;
 }
 
+export interface LoonGeneratorOptions {
+  expandNodes?: boolean;
+  baseUrl?: string;
+  subToken?: string;
+}
+
 export function generateLoonConfig(
   templateMcf: string,
   nodes: ProxyNode[],
   proxyGroups: ProxyGroupItem[] = [],
   rulesList: UnifiedRuleItem[] = [],
   sources: any[] = [],
-  options?: { expandNodes?: boolean }
+  options?: LoonGeneratorOptions
 ): string {
   const expandNodes = Boolean(options?.expandNodes);
   const lines = templateMcf.split('\n');
   const resultLines: string[] = [];
 
-  // In expandNodes mode, write all nodes into [Proxy]; otherwise only custom/manual or non-remote-subscription nodes
+  // In expandNodes mode, write all nodes into [Proxy]
   const allNodesMap = new Map<string, ProxyNode>();
   nodes.forEach(n => allNodesMap.set(n.name, n));
   sources.forEach(s => {
@@ -210,9 +216,20 @@ export function generateLoonConfig(
   const networkSourceIds = new Set(
     sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http')).map(s => s.id)
   );
-  const nodesToWrite = expandNodes
-    ? allCandidateNodes
-    : allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
+
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken);
+
+  let nodesToWrite: ProxyNode[] = [];
+  if (expandNodes) {
+    nodesToWrite = allCandidateNodes;
+  } else if (!hasSuboneRemoteSubscription) {
+    // 降级兼容：如果未提供 baseUrl/subToken，自建节点依旧写入静态 [Proxy]
+    nodesToWrite = allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId));
+  } else {
+    // 订阅化模式：自建节点已挂载到 [Remote Proxy]，无需写入静态 [Proxy]
+    nodesToWrite = [];
+  }
+
   const generatedProxyLines = nodesToWrite.map(nodeToLoonProxy);
 
   let inProxySection = false;
@@ -226,7 +243,9 @@ export function generateLoonConfig(
       inProxySection = true;
       hasHandledProxy = true;
       resultLines.push(line);
-      resultLines.push(...generatedProxyLines);
+      if (generatedProxyLines.length > 0) {
+        resultLines.push(...generatedProxyLines);
+      }
       continue;
     }
 
@@ -240,10 +259,13 @@ export function generateLoonConfig(
 
   if (!hasHandledProxy) {
     resultLines.push('\n[Proxy]');
-    resultLines.push(...generatedProxyLines);
+    if (generatedProxyLines.length > 0) {
+      resultLines.push(...generatedProxyLines);
+    }
   }
 
   const baseConfig = resultLines.join('\n');
   return injectUnifiedToLoon(baseConfig, nodes, proxyGroups, rulesList, sources, options);
 }
+
 

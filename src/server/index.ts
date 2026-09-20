@@ -5,12 +5,13 @@ import fs from 'fs';
 import crypto from 'crypto';
 import { loadConfig, saveConfig, generateRandomSubToken, saveServerConfig } from '../storage/db.js';
 import { fetchAndParseSource, parseRawContent } from '../core/parser/fetcher.js';
+import yaml from 'js-yaml';
 import { applyExtractionRules } from '../core/filter/extractor.js';
-import { generateMihomoConfig } from '../core/generators/mihomo-generator.js';
+import { generateMihomoConfig, nodeToMihomoProxy } from '../core/generators/mihomo-generator.js';
 import { generateSingboxConfig } from '../core/generators/singbox-generator.js';
-import { generateLoonConfig } from '../core/generators/loon-generator.js';
-import { generateQuantumultXConfig } from '../core/generators/quantumultx-generator.js';
-import { generateEgernConfig } from '../core/generators/egern-generator.js';
+import { generateLoonConfig, nodeToLoonProxy } from '../core/generators/loon-generator.js';
+import { generateQuantumultXConfig, nodeToQuantumultXProxy } from '../core/generators/quantumultx-generator.js';
+import { generateEgernConfig, nodeToEgernProxy } from '../core/generators/egern-generator.js';
 import { generateShadowrocketConfig, generateShadowrocketBase64 } from '../core/generators/shadowrocket-generator.js';
 import { detectClientType, ClientType } from '../core/parser/ua-detector.js';
 import {
@@ -1526,6 +1527,12 @@ app.post('/api/profiles/:id/refresh-token', (req, res) => {
   res.json({ success: true, data: profile });
 });
 
+function getBaseUrl(req: express.Request): string {
+  const proto = (req.headers['x-forwarded-proto'] as string) || req.protocol || 'http';
+  const host = (req.headers['x-forwarded-host'] as string) || req.get('host') || `localhost:${PORT}`;
+  return `${proto}://${host}`;
+}
+
 // 8. Live Preview
 app.post('/api/generate/preview', async (req, res) => {
   try {
@@ -1574,26 +1581,43 @@ app.post('/api/generate/preview', async (req, res) => {
       : appConfig.sources;
 
     let output = '';
+    const baseUrl = getBaseUrl(req);
+    const subToken = targetProfile?.token || 'preview-token';
+    const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
+
     if (targetType === 'mihomo') {
-      output = generateMihomoConfig(templateContent, nodes, groups, rules, effectiveSources);
+      output = generateMihomoConfig(templateContent, nodes, groups, rules, effectiveSources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken
+      });
     } else if (targetType === 'singbox') {
       output = generateSingboxConfig(templateContent, nodes, groups, rules, effectiveSources);
     } else if (targetType === 'loon') {
-      const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
-      output = generateLoonConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+      output = generateLoonConfig(templateContent, nodes, groups, rules, effectiveSources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken
+      });
     } else if (targetType === 'quantumultx') {
-      const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
-      output = generateQuantumultXConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+      output = generateQuantumultXConfig(templateContent, nodes, groups, rules, effectiveSources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken
+      });
     } else if (targetType === 'egern') {
-      const expand = Boolean(req.body?.expandNodes || req.query?.expand === 'true' || req.query?.expand === '1');
-      output = generateEgernConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+      output = generateEgernConfig(templateContent, nodes, groups, rules, effectiveSources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken
+      });
     } else if (targetType === 'shadowrocket') {
       const isBase64 = req.body?.format === 'base64' || req.query?.format === 'base64';
       if (isBase64) {
         output = generateShadowrocketBase64(nodes);
       } else {
-        const expand = req.body?.expandNodes !== false;
-        output = generateShadowrocketConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expand });
+        const expandRocket = req.body?.expandNodes !== false;
+        output = generateShadowrocketConfig(templateContent, nodes, groups, rules, effectiveSources, { expandNodes: expandRocket });
       }
     }
 
@@ -1639,9 +1663,15 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
     const groups = getEffectiveGroupsForProfile(profile, nodes);
     const rules = getEffectiveRulesForProfile(profile);
     const sources = getEffectiveSourcesForProfile(profile, nodes);
+    const baseUrl = getBaseUrl(req);
 
     if (detectedType === 'mihomo') {
-      const output = generateMihomoConfig(templateContent, nodes, groups, rules, sources);
+      const expand = req.query.expand === 'true' || req.query.expand === '1' || req.query.node_list === 'true';
+      const output = generateMihomoConfig(templateContent, nodes, groups, rules, sources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken: tokenParam
+      });
       res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
       res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
       return res.send(output);
@@ -1655,14 +1685,22 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
 
     if (detectedType === 'loon') {
       const expand = req.query.expand === 'true' || req.query.expand === '1' || req.query.node_list === 'true';
-      const output = generateLoonConfig(templateContent, nodes, groups, rules, sources, { expandNodes: expand });
+      const output = generateLoonConfig(templateContent, nodes, groups, rules, sources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken: tokenParam
+      });
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       return res.send(output);
     }
 
     if (detectedType === 'quantumultx') {
       const expand = req.query.expand === 'true' || req.query.expand === '1' || req.query.node_list === 'true';
-      const output = generateQuantumultXConfig(templateContent, nodes, groups, rules, sources, { expandNodes: expand });
+      const output = generateQuantumultXConfig(templateContent, nodes, groups, rules, sources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken: tokenParam
+      });
       res.setHeader('Content-Type', 'text/plain; charset=utf-8');
       res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
       return res.send(output);
@@ -1670,7 +1708,11 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
 
     if (detectedType === 'egern') {
       const expand = req.query.expand === 'true' || req.query.expand === '1' || req.query.node_list === 'true';
-      const output = generateEgernConfig(templateContent, nodes, groups, rules, sources, { expandNodes: expand });
+      const output = generateEgernConfig(templateContent, nodes, groups, rules, sources, {
+        expandNodes: expand,
+        baseUrl,
+        subToken: tokenParam
+      });
       res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
       res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
       return res.send(output);
@@ -1697,7 +1739,102 @@ async function handlePrivateSubRequest(req: express.Request, res: express.Respon
   }
 }
 
+async function handleSourceSubRequest(req: express.Request, res: express.Response, forcedTarget?: ClientType) {
+  const tokenParam = req.params.subToken;
+  const sourceIdParam = req.params.sourceId;
+
+  if (!tokenParam || !sourceIdParam) {
+    res.removeHeader('X-Powered-By');
+    return res.status(404).type('text/plain').send('404 Not Found');
+  }
+
+  const profile = (appConfig.profiles || []).find(p => p.token === tokenParam && p.enabled !== false);
+  if (!profile) {
+    res.removeHeader('X-Powered-By');
+    return res.status(404).type('text/plain').send('404 Not Found');
+  }
+
+  const cleanId = sourceIdParam.trim().toLowerCase();
+  const matchedSource = (appConfig.sources || []).find(s =>
+    s.enabled && (
+      s.id.toLowerCase() === cleanId ||
+      s.name.trim().toLowerCase() === cleanId ||
+      (cleanId === 'custom' && (s.type === 'custom' || s.id === 'custom'))
+    )
+  );
+
+  if (!matchedSource) {
+    res.removeHeader('X-Powered-By');
+    return res.status(404).type('text/plain').send('404 Not Found');
+  }
+
+  try {
+    let sourceNodes: ProxyNode[] = [];
+    if (matchedSource.type === 'filter') {
+      const allPhysicalNodes = await getEffectiveNodes();
+      sourceNodes = computeFilterSourceNodes(matchedSource, allPhysicalNodes);
+    } else {
+      sourceNodes = matchedSource.nodes || [];
+    }
+
+    // 应用提取规则
+    sourceNodes = applyExtractionRules(sourceNodes, appConfig.rules);
+
+    const queryTarget = (req.query.target as string) || (req.query.type as string) || (req.params.target as string);
+    const userAgent = req.headers['user-agent'];
+    const detectedType = forcedTarget || detectClientType(userAgent, queryTarget, 'loon');
+
+    if (detectedType === 'loon') {
+      const proxyLines = sourceNodes.map(nodeToLoonProxy);
+      const output = ['[Proxy]', ...proxyLines].join('\n');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+      return res.send(output);
+    }
+
+    if (detectedType === 'mihomo') {
+      const proxies = sourceNodes.map(nodeToMihomoProxy);
+      const output = yaml.dump({ proxies }, { indent: 2, lineWidth: -1, noRefs: true });
+      res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+      res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+      return res.send(output);
+    }
+
+    if (detectedType === 'quantumultx') {
+      const proxyLines = sourceNodes.map(nodeToQuantumultXProxy);
+      const output = proxyLines.join('\n');
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+      return res.send(output);
+    }
+
+    if (detectedType === 'egern') {
+      const proxies = sourceNodes.map(nodeToEgernProxy);
+      const output = yaml.dump({ proxies }, { indent: 2, lineWidth: -1 });
+      res.setHeader('Content-Type', 'text/yaml; charset=utf-8');
+      res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+      return res.send(output);
+    }
+
+    const output = generateShadowrocketBase64(sourceNodes);
+    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+    res.setHeader('subscription-userinfo', 'upload=0; download=0; total=1073741824000; expire=0');
+    return res.send(output);
+  } catch (err: any) {
+    console.error('Source subscription generation error:', err);
+    res.status(500).send(`Generation error: ${err.message || err}`);
+  }
+}
+
 // Secret Token Routes
+app.get('/s/:subToken/source/:sourceId/loon', (req, res) => handleSourceSubRequest(req, res, 'loon'));
+app.get('/s/:subToken/source/:sourceId/:target', (req, res) => {
+  const target = req.params.target;
+  const mapped = target === 'qx' ? 'quantumultx' : (target === 'rocket' ? 'shadowrocket' : target);
+  return handleSourceSubRequest(req, res, mapped as ClientType);
+});
+app.get('/s/:subToken/source/:sourceId', (req, res) => handleSourceSubRequest(req, res));
+
 app.get('/s/:subToken', (req, res) => handlePrivateSubRequest(req, res));
 app.get('/s/:subToken/mihomo', (req, res) => handlePrivateSubRequest(req, res, 'mihomo'));
 app.get('/s/:subToken/singbox', (req, res) => handlePrivateSubRequest(req, res, 'singbox'));

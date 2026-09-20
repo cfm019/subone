@@ -272,12 +272,19 @@ export function nodeToMihomoProxy(node: ProxyNode): any {
   return base;
 }
 
+export interface MihomoGeneratorOptions {
+  expandNodes?: boolean;
+  baseUrl?: string;
+  subToken?: string;
+}
+
 export function generateMihomoConfig(
   templateYaml: string,
   nodes: ProxyNode[],
   proxyGroups: ProxyGroupItem[] = [],
   rulesList: UnifiedRuleItem[] = [],
-  sources: SubscriptionSource[] = []
+  sources: SubscriptionSource[] = [],
+  options?: MihomoGeneratorOptions
 ): string {
   let doc: any;
   try {
@@ -288,6 +295,9 @@ export function generateMihomoConfig(
   if (!doc || typeof doc !== 'object') {
     doc = {};
   }
+
+  const expandNodes = Boolean(options?.expandNodes);
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !expandNodes);
 
   // 1. Inject Custom / Manual / Filter Proxies directly (if any)
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
@@ -303,13 +313,23 @@ export function generateMihomoConfig(
     }
   });
   const allCandidateNodes = Array.from(allNodesMap.values());
-  const nodesToWrite = networkSources.length > 0
-    ? allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId))
-    : allCandidateNodes;
+
+  let nodesToWrite: ProxyNode[] = [];
+  if (expandNodes) {
+    nodesToWrite = allCandidateNodes;
+  } else if (!hasSuboneRemoteSubscription) {
+    nodesToWrite = networkSources.length > 0
+      ? allCandidateNodes.filter(n => !n.sourceId || n.sourceId === 'custom' || n.sourceId.startsWith('custom') || !networkSourceIds.has(n.sourceId))
+      : allCandidateNodes;
+  } else {
+    // 订阅化模式：由 proxy-providers 接管自建源
+    nodesToWrite = [];
+  }
+
   doc.proxies = nodesToWrite.map(nodeToMihomoProxy);
 
   // 2. Inject Proxy Groups & Unified Rules & Proxy Providers & DNS
-  doc = injectUnifiedToMihomo(doc, nodes, proxyGroups, rulesList, sources);
+  doc = injectUnifiedToMihomo(doc, nodes, proxyGroups, rulesList, sources, options);
 
   return yaml.dump(doc, {
     indent: 2,
