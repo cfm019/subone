@@ -353,7 +353,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-6 pb-16">
+    <div className="max-w-6xl mx-auto space-y-6 pb-16">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-[#E3DDD2] shadow-2xs">
         <div>
           <div className="flex items-center gap-2">

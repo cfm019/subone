@@ -343,37 +343,37 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   };
 
   return (
-    <div className="max-w-5xl mx-auto space-y-5 pb-16">
-      {/* 1. 顶部操作栏与统计指标 */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-[#E8E4DC] pb-4">
+    <div className="max-w-6xl mx-auto space-y-5 pb-16">
+      {/* 1. 顶部操作栏卡片 */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 bg-white p-4 rounded-2xl border border-[#E3DDD2] shadow-2xs">
         <div>
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            <Layers className="w-5 h-5 text-[#CC785C]" />
             <h1 className="text-base font-bold text-[#1F1E1D]">订阅与节点</h1>
-            <div className="flex items-center gap-1.5">
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#FBF2EA] text-[#C45E38] font-semibold border border-[#F2D8C9]">
-                {customSources.length} 个独立节点组
-              </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#EAF2EE] text-[#2D6A5A] font-semibold border border-[#D5E5DE]">
-                {networkSources.length} 个网络订阅
-              </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#EFEAE2] text-[#69655E] font-semibold border border-[#DFD9CF]">
-                {filterSources.length} 个规则组
-              </span>
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-[#EFEAE2] text-[#69655E] font-mono font-semibold">
-                共 {totalNodesCount} 节点
-              </span>
-            </div>
+            <span className="px-2.5 py-0.5 bg-[#FAF0EC] text-[#B85D3F] rounded-md font-mono text-xs font-bold border border-[#F3DDD3]">
+              共 {totalNodesCount} 节点
+            </span>
           </div>
-          <p className="text-xs text-[#8C877D] mt-1">
-            统一管理网络订阅、独立节点组与规则分组
-          </p>
+          <div className="flex items-center gap-2 mt-1 text-xs text-[#78746D] flex-wrap">
+            <span>统一管理网络订阅与节点分组</span>
+            <span className="text-[#D0C9BD]">•</span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#FAF8F5] border border-[#E8E4DC] text-[#59554E] text-[11px] font-medium">
+              <span>{customSources.length} 独立组</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#EAF2EE] border border-[#D5E5DE] text-[#2D6A5A] text-[11px] font-medium">
+              <span>{networkSources.length} 网络订阅</span>
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#F4F1FA] border border-[#E8E1F5] text-[#6A4C9C] text-[11px] font-medium">
+              <span>{filterSources.length} 规则组</span>
+            </span>
+          </div>
         </div>
 
         {/* 顶部操作按钮组 */}
         <div className="flex items-center gap-2 shrink-0 flex-wrap">
           <button
             onClick={() => handleOpenImportModal()}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl shadow-2xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl shadow-2xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>添加节点</span>
@@ -381,7 +381,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
           <button
             onClick={() => setShowAddNetworkModal(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
             <span>添加订阅</span>
@@ -392,19 +392,19 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
               setNewGroupNameInput('');
               setShowCreateGroupModal(true);
             }}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
             title="新建独立的节点分组"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
-            <span>新建独立节点组</span>
+            <span>新建独立组</span>
           </button>
 
           <button
             onClick={handleOpenCreateFilterGroup}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
             title="基于节点来源与规则生成派生节点分组"
           >
-            <Sparkles className="w-3.5 h-3.5 stroke-[2.5]" />
+            <Sparkles className="w-3.5 h-3.5 text-[#6A4C9C]" />
             <span>新建规则组</span>
           </button>
         </div>
