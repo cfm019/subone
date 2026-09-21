@@ -485,7 +485,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     <div className="flex items-center gap-2 flex-wrap">
                       {/* 类型徽章 */}
                       {isFilter ? (
-                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#F0ECE4] text-[#59554E] border border-[#DFD9CF] shrink-0">
+                        <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-[#F4F1FA] text-[#6A4C9C] border border-[#E8E1F5] shrink-0">
                           ✨ 规则组
                         </span>
                       ) : isCustom ? (
@@ -499,14 +499,21 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                       )}
 
                       {/* 标题 */}
-                      <h3 className="text-xs font-bold text-[#1F1E1D] truncate max-w-xs sm:max-w-md">
+                      <h3 className={`text-xs font-bold truncate max-w-xs sm:max-w-md ${source.enabled === false ? 'text-[#8C877D]' : 'text-[#1F1E1D]'}`}>
                         {source.name}
                       </h3>
 
                       {/* 节点数徽章 */}
-                      <span className="px-2 py-0.5 text-[10px] font-mono font-semibold rounded bg-[#F0ECE4] text-[#59554E] shrink-0">
+                      <span className={`px-2 py-0.5 text-[10px] font-mono font-semibold rounded shrink-0 ${source.enabled === false ? 'bg-[#ECE8E1] text-[#9E9A91]' : 'bg-[#F0ECE4] text-[#59554E]'}`}>
                         {nodesList.length} 节点
                       </span>
+
+                      {/* 停用状态提示徽章 */}
+                      {source.enabled === false && (
+                        <span className="px-1.5 py-0.2 text-[10px] font-semibold rounded bg-[#F0EBE1] text-[#8C877D] border border-[#DDD6C9] shrink-0">
+                          已停用 (不导出)
+                        </span>
+                      )}
                     </div>
 
                     {/* 卡片副信息 */}
@@ -547,9 +554,9 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   </div>
                 </div>
 
-                {/* 右侧快捷操作按钮（点击阻止事件冒泡） */}
+                {/* 右侧快捷操作按钮（统一小图标） */}
                 <div
-                  className="flex items-center gap-1.5 self-end sm:self-center shrink-0"
+                  className="flex items-center gap-1 self-end sm:self-center shrink-0"
                   onClick={e => e.stopPropagation()}
                 >
                   {/* 规则组专属操作 */}
@@ -557,11 +564,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     <>
                       <button
                         onClick={() => handleOpenEditFilterGroup(source)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#69655E] bg-[#EFEAE2] hover:bg-[#E5DFD5] rounded-lg transition-colors cursor-pointer"
-                        title="编辑此规则组配置"
+                        className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer"
+                        title="编辑规则组配置"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
-                        <span>编辑规则</span>
                       </button>
 
                       <button
@@ -576,7 +582,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                       <button
                         onClick={() => onUpdateSource(source.id, { enabled: !source.enabled })}
                         className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2]/60 rounded-lg transition-colors cursor-pointer"
-                        title={source.enabled !== false ? '点击停用' : '点击启用'}
+                        title={source.enabled !== false ? '已启用（点击停用此规则组，停用后不导出到客户端）' : '已停用（点击启用此规则组）'}
                       >
                         {source.enabled !== false ? (
                           <CheckCircle2 className="w-4 h-4 text-[#367A68]" />
@@ -604,11 +610,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     <>
                       <button
                         onClick={() => handleOpenImportModal(source.id)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#CC785C] bg-[#CC785C]/10 hover:bg-[#CC785C]/20 rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 text-[#CC785C] hover:text-[#B85D3F] hover:bg-[#FAF0EC] rounded-lg transition-colors cursor-pointer"
                         title="添加节点到此组"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        <span>添加节点</span>
                       </button>
 
                       <button
@@ -616,7 +621,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                           setRenamingSource(source);
                           setNewGroupNameInput(source.name);
                         }}
-                        className="p-1.5 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2]/60 rounded-lg transition-colors cursor-pointer"
+                        className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2]/60 rounded-lg transition-colors cursor-pointer"
                         title="重命名此节点组"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
@@ -643,27 +648,25 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                     <>
                       <button
                         onClick={() => handleOpenEditNetworkModal(source)}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#69655E] bg-[#EFEAE2] hover:bg-[#E5DFD5] rounded-lg transition-colors cursor-pointer"
-                        title="编辑订阅源（名称、链接或解析模式）"
+                        className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer"
+                        title="编辑此订阅源（名称、URL或解析模式）"
                       >
                         <Edit2 className="w-3.5 h-3.5" />
-                        <span>编辑</span>
                       </button>
 
                       <button
                         onClick={() => handleSingleRefresh(source.id)}
                         disabled={isThisRefreshing}
-                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium btn-claude-secondary rounded-lg disabled:opacity-50 cursor-pointer"
+                        className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer disabled:opacity-50"
                         title="单独刷新此订阅"
                       >
                         <RefreshCw className={`w-3.5 h-3.5 text-[#CC785C] ${isThisRefreshing ? 'animate-spin' : ''}`} />
-                        <span>{isThisRefreshing ? '同步中' : '刷新'}</span>
                       </button>
 
                       <button
                         onClick={() => onUpdateSource(source.id, { enabled: !source.enabled })}
                         className="p-1.5 text-[#8C877D] hover:text-[#1F1E1D] hover:bg-[#EFEAE2]/60 rounded-lg transition-colors cursor-pointer"
-                        title={source.enabled !== false ? '点击停用' : '点击启用'}
+                        title={source.enabled !== false ? '已启用（点击停用此订阅源，停用后不导出到客户端）' : '已停用（点击启用此订阅源）'}
                       >
                         {source.enabled !== false ? (
                           <CheckCircle2 className="w-4 h-4 text-[#367A68]" />
