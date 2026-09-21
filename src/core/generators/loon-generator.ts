@@ -281,7 +281,7 @@ export function injectUnifiedToLoon(
   const lines = templateMcf.split('\n');
   const activeRules = rulesList.filter(r => r.enabled);
   const remoteRules = activeRules.filter(r => r.kind === 'remote');
-  const localRules = activeRules.filter(r => r.kind === 'local');
+  const localRules = activeRules.filter(r => r.kind === 'local' && r.type !== 'FINAL');
 
   const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
   const customTagName = customSources[0]?.name
@@ -671,6 +671,13 @@ export function injectUnifiedToLoon(
     });
   });
 
+  const finalRule = activeRules.find(r => r.type === 'FINAL');
+  const finalOutbound = finalRule
+    ? resolveSafeOutbound(finalRule.outbound, availableGroupNames, fallbackGroup)
+    : (availableGroupNames.has('🐟 漏网之鱼') ? '🐟 漏网之鱼' : fallbackGroup);
+
+  localRuleLines.push(`FINAL,${finalOutbound}`);
+
   // 5. Build [Remote Rule]
   const remoteRuleLines = remoteRules.map((r, idx) => {
     const adapted = adaptRulesetForLoon(r, idx);
@@ -679,11 +686,12 @@ export function injectUnifiedToLoon(
     return `${adapted.url}, policy=${safeOutbound}, tag=${tag}, enabled=true`;
   });
 
-
   const result: string[] = [];
   let hasHandledRemoteProxy = false;
   let hasHandledRemoteFilter = false;
   let hasHandledGroup = false;
+  let hasHandledRule = false;
+  let hasHandledRemoteRule = false;
 
   let inSkippedSection = false;
 
@@ -692,6 +700,11 @@ export function injectUnifiedToLoon(
 
     // Ignore legacy or incorrect [Proxy Provider] header
     if (trimmed === '[Proxy Provider]') {
+      continue;
+    }
+
+    // Ignore hardcoded FINAL lines from template to prevent duplicate or misplaced FINAL entries
+    if (trimmed.startsWith('FINAL,') || trimmed.startsWith('final,') || trimmed === 'FINAL' || trimmed === 'final') {
       continue;
     }
 
@@ -745,12 +758,14 @@ export function injectUnifiedToLoon(
     }
 
     if (trimmed === '[Rule]') {
+      hasHandledRule = true;
       result.push(line);
       result.push(...localRuleLines);
       continue;
     }
 
     if (trimmed === '[Remote Rule]') {
+      hasHandledRemoteRule = true;
       result.push(line);
       result.push(...remoteRuleLines);
       continue;
@@ -772,6 +787,14 @@ export function injectUnifiedToLoon(
   if (!hasHandledGroup && groupLines.length > 0) {
     result.push('\n[Proxy Group]');
     result.push(...groupLines);
+  }
+  if (!hasHandledRule && localRuleLines.length > 0) {
+    result.push('\n[Rule]');
+    result.push(...localRuleLines);
+  }
+  if (!hasHandledRemoteRule && remoteRuleLines.length > 0) {
+    result.push('\n[Remote Rule]');
+    result.push(...remoteRuleLines);
   }
 
   return result.join('\n');
