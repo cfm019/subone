@@ -1,7 +1,8 @@
 import yaml from 'js-yaml';
 import { ProxyNode, ProxyGroupItem, UnifiedRuleItem, SubscriptionSource } from '../../types/index.js';
 
-import { injectUnifiedToMihomo } from './rule-injector.js';
+import { adaptRulesetForMihomo, formatRuleTag } from './ruleset-adapter.js';
+import { resolveSafeOutbound, formatCidr, cleanSourceOrGroupName, formatSourceGroupTag } from './common.js';
 
 export function nodeToMihomoProxy(node: ProxyNode): any {
   // Only reuse raw if it is legitimately a Clash/Mihomo proxy object (not sing-box outbound, etc.)
@@ -338,4 +339,372 @@ export function generateMihomoConfig(
   });
 }
 
+export function injectUnifiedToMihomo(
+  doc: any,
+  nodes: ProxyNode[],
+  proxyGroups: ProxyGroupItem[],
+  rulesList: UnifiedRuleItem[],
+  sources: SubscriptionSource[] = [],
+  options?: { expandNodes?: boolean; baseUrl?: string; subToken?: string }
+): any {
 
+  if (!doc || typeof doc !== 'object') doc = {};
+
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
+  const internalSources = sources.filter(s => s.enabled && !networkSources.some(ns => ns.id === s.id));
+  const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !options?.expandNodes);
+
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
+  const customNodeNames = customNodes.map(n => n.name);
+  const allNodeNames = nodes.map(n => n.name);
+
+  // 1. Inject Proxy Providers for network subscriptions and internal sources
+  const allActiveRemoteSources: SubscriptionSource[] = [];
+
+  if (!options?.expandNodes) {
+    if (!doc['proxy-providers'] || typeof doc['proxy-providers'] !== 'object') {
+      doc['proxy-providers'] = {};
+    }
+
+    // 外部机场源
+    networkSources.forEach(s => {
+      const providerKey = s.name.trim();
+      const safePathName = providerKey
+        .replace(/^[⚡️🚀👉♻️🌐📹✈️🤖🇨🇳🇭🇰🇯🇵🇺🇸🏮🇸🇬\s]+/u, '')
+        .replace(/[\\/:*?"<>|\r\n\t]/g, '_')
+        .replace(/\.{2,}/g, '_')
+        .trim() || s.id || 'provider';
+
+      doc['proxy-providers'][providerKey] = {
+        type: 'http',
+        url: s.url,
+        interval: 86400,
+        path: `./proxy_providers/${safePathName}.yaml`,
+        'health-check': {
+          enable: true,
+          url: 'https://www.google.com/generate_204',
+          interval: 300,
+        },
+      };
+      allActiveRemoteSources.push(s);
+    });
+
+    // 内部自建/过滤/独立源转为 proxy-provider
+    if (hasSuboneRemoteSubscription && options?.baseUrl && options?.subToken) {
+      const cleanBaseUrl = options.baseUrl.replace(/\/+$/, '');
+      const token = encodeURIComponent(options.subToken);
+      internalSources.forEach(s => {
+        const providerKey = s.name.trim();
+        const safePathName = providerKey
+          .replace(/^[⚡️🚀👉♻️🌐📹✈️🤖🇨🇳🇭🇰🇯🇵🇺🇸🏮🇸🇬\s]+/u, '')
+          .replace(/[\\/:*?"<>|\r\n\t]/g, '_')
+          .replace(/\.{2,}/g, '_')
+          .trim() || s.id || 'provider';
+
+        doc['proxy-providers'][providerKey] = {
+          type: 'http',
+          url: `${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=mihomo`,
+          interval: 86400,
+          path: `./proxy_providers/${safePathName}.yaml`,
+          'health-check': {
+            enable: true,
+            url: 'https://www.google.com/generate_204',
+            interval: 300,
+          },
+        };
+        allActiveRemoteSources.push(s);
+      });
+    }
+  }
+
+  const allProviderNames = allActiveRemoteSources.map(s => s.name.trim());
+
+  // 2. Build Proxy Groups
+  const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
+  const customTagName = customSources[0]?.name
+    ? formatSourceGroupTag(customSources[0])
+    : '🖥️ 独立节点组';
+
+  const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
+    ...g,
+    proxies: g.proxies ? [...g.proxies] : undefined,
+    use: g.use ? [...g.use] : undefined,
+  }));
+
+  // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale custom group aliases
+  const customGrp = effectiveGroups.find(g =>
+    g.id === 'grp-src-custom' ||
+    g.name === customTagName ||
+    cleanSourceOrGroupName(g.name) === '独立节点组' ||
+    cleanSourceOrGroupName(g.name) === '自建节点'
+  );
+  if (customGrp) {
+    customGrp.name = customTagName;
+    customGrp.use = [cleanSourceOrGroupName(customSources[0]?.name || '独立节点组')];
+    const idx = effectiveGroups.indexOf(customGrp);
+    for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+      if (i !== idx) {
+        const g = effectiveGroups[i];
+        if (g.id === 'grp-src-custom' || cleanSourceOrGroupName(g.name) === '独立节点组' || cleanSourceOrGroupName(g.name) === '自建节点') {
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+    effectiveGroups.forEach(grp => {
+      if (grp !== customGrp) {
+        if (grp.use) {
+          grp.use = grp.use.map(u => (cleanSourceOrGroupName(u) === '独立节点组' || cleanSourceOrGroupName(u) === '自建节点' ? cleanSourceOrGroupName(customSources[0]?.name || '独立节点组') : u));
+        }
+        if (grp.proxies) {
+          grp.proxies = grp.proxies.map(p => (cleanSourceOrGroupName(p) === '独立节点组' || cleanSourceOrGroupName(p) === '自建节点' ? customTagName : p));
+        }
+      }
+    });
+  }
+
+  const validGroupNames = new Set(effectiveGroups.map(g => g.name));
+  const validNodeNames = new Set(allNodeNames);
+  sources.forEach(s => {
+    if (Array.isArray(s.nodes)) {
+      s.nodes.forEach(n => validNodeNames.add(n.name));
+    }
+  });
+  const isBuiltinClashProxy = (t: string) => {
+    const upper = t.trim().toUpperCase();
+    return (
+      upper === 'DIRECT' ||
+      upper === 'REJECT' ||
+      upper === 'PASS' ||
+      upper === 'COMPATIBLE' ||
+      upper === 'GLOBAL' ||
+      t.trim() === '🎯 本地直连'
+    );
+  };
+
+  const generatedGroups: any[] = [];
+  effectiveGroups.forEach(grp => {
+    if (grp.type === 'direct') {
+      generatedGroups.push({
+        name: grp.name,
+        type: 'select',
+        proxies: ['DIRECT'],
+      });
+      return;
+    }
+    if (grp.type === 'reject') {
+      generatedGroups.push({
+        name: grp.name,
+        type: 'select',
+        proxies: ['REJECT'],
+      });
+      return;
+    }
+
+    const groupType = grp.type === 'urltest' ? 'url-test' : (grp.type === 'load-balance' ? 'load-balance' : grp.type);
+    const grpObj: any = {
+      name: grp.name,
+      type: groupType,
+    };
+
+    if (groupType === 'url-test' || groupType === 'fallback') {
+      grpObj.url = grp.url || 'https://www.google.com/generate_204';
+      grpObj.interval = grp.interval || 300;
+      grpObj.tolerance = grp.tolerance || 50;
+    }
+
+    // If using filter regex (e.g. for country groups)
+    if (grp.filter) {
+      grpObj.filter = grp.filter;
+      if (allProviderNames.length > 0) {
+        grpObj.use = grp.use && grp.use.length > 0 ? grp.use : allProviderNames;
+      }
+      if (!hasSuboneRemoteSubscription && customNodeNames.length > 0) {
+        grpObj.proxies = customNodeNames;
+      } else if (!grpObj.use || grpObj.use.length === 0) {
+        grpObj.proxies = ['DIRECT'];
+      }
+      generatedGroups.push(grpObj);
+      return;
+    }
+
+    // Custom dedicated node group or dedicated source group
+    const cleanName = cleanSourceOrGroupName(grp.name).toLowerCase();
+    const matchedProvider = allProviderNames.find(p => {
+      const cleanP = cleanSourceOrGroupName(p).toLowerCase();
+      return cleanP === cleanName || p.toLowerCase() === cleanName;
+    });
+
+    if (matchedProvider) {
+      grpObj.use = [matchedProvider];
+      delete grpObj.proxies;
+      generatedGroups.push(grpObj);
+      return;
+    }
+
+    if (!hasSuboneRemoteSubscription) {
+      const isCustomGrp = grp.id === 'grp-src-custom' ||
+        cleanName === '自建节点' ||
+        cleanName === '独立节点组' ||
+        cleanName === 'custom' ||
+        cleanName === '手工自建' ||
+        customSources.some(cs => cleanSourceOrGroupName(cs.name).toLowerCase() === cleanName);
+
+      if (isCustomGrp) {
+        grpObj.proxies = customNodeNames.length > 0 ? customNodeNames : ['DIRECT'];
+        delete grpObj.use;
+        generatedGroups.push(grpObj);
+        return;
+      }
+    }
+
+    // Selector / General groups
+    const explicitProxies = grp.proxies || [];
+    const combinedProxies = new Set<string>(explicitProxies);
+
+    // If user explicitly specified `use` or this is a top-level aggregator group
+    if (grp.use && grp.use.length > 0) {
+      grp.use.forEach(u => {
+        const cleanU = cleanSourceOrGroupName(u).toLowerCase();
+        const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cleanSourceOrGroupName(cs.name).toLowerCase() === cleanU);
+        if (!hasSuboneRemoteSubscription && isCustomU) {
+          if (validGroupNames.has(customTagName)) {
+            combinedProxies.add(customTagName);
+          }
+          customNodeNames.forEach(name => combinedProxies.add(name));
+        }
+
+        // Check if matching source (especially filter/derived sources without proxy-provider)
+        const matchedSource = sources.find(s => {
+          const sClean = cleanSourceOrGroupName(s.name).toLowerCase();
+          return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+        });
+        if (matchedSource && !allProviderNames.includes(matchedSource.name.trim())) {
+          if (Array.isArray(matchedSource.nodes)) {
+            matchedSource.nodes.forEach(n => combinedProxies.add(n.name));
+          }
+        }
+      });
+
+      const mappedUse = grp.use.map(u => {
+        const direct = allProviderNames.find(p => p.toLowerCase() === u.toLowerCase());
+        if (direct) return direct;
+        const cleanU = cleanSourceOrGroupName(u).toLowerCase();
+        const canonical = allProviderNames.find(p => {
+          const cleanP = cleanSourceOrGroupName(p).toLowerCase();
+          return cleanP === cleanU || p.toLowerCase() === cleanU;
+        });
+        return canonical || u;
+      }).filter(u => allProviderNames.includes(u));
+
+      if (mappedUse.length > 0) {
+        grpObj.use = mappedUse;
+      }
+    } else if (allProviderNames.length > 0 && (grp.name === '🚀 节点选择' || grp.name === '👉 手动选择' || grp.name === '♻️ 自动选择')) {
+      grpObj.use = allProviderNames;
+    }
+
+    // Add custom nodes or fallback
+    if (!hasSuboneRemoteSubscription && (grp.name === '👉 手动选择' || (combinedProxies.size === 0 && !grpObj.use))) {
+      customNodeNames.forEach(name => combinedProxies.add(name));
+    }
+
+    if (!hasSuboneRemoteSubscription && grp.name === '🚀 节点选择' && customNodes.length > 0 && validGroupNames.has(customTagName)) {
+      combinedProxies.add(customTagName);
+    }
+
+    // Filter combinedProxies to only keep valid groups, nodes, or builtins
+    const filteredProxies = Array.from(combinedProxies).filter(p => {
+      if (!p || p.trim() === grp.name) return false;
+      const t = p.trim();
+      return validGroupNames.has(t) || validNodeNames.has(t) || isBuiltinClashProxy(t);
+    });
+
+    if (filteredProxies.length > 0) {
+      grpObj.proxies = filteredProxies;
+    }
+
+    if ((!grpObj.proxies || grpObj.proxies.length === 0) && (!grpObj.use || grpObj.use.length === 0)) {
+      grpObj.proxies = ['DIRECT'];
+    }
+
+    generatedGroups.push(grpObj);
+  });
+
+  doc['proxy-groups'] = generatedGroups.length > 0 ? generatedGroups : doc['proxy-groups'];
+
+  // 2. Build Remote Rule Providers
+  const activeRules = rulesList.filter(r => r.enabled);
+  const remoteRules = activeRules.filter(r => r.kind === 'remote');
+  const localRules = activeRules.filter(r => r.kind === 'local');
+
+  if (remoteRules.length > 0) {
+    if (!doc['rule-providers'] || typeof doc['rule-providers'] !== 'object') {
+      doc['rule-providers'] = {};
+    }
+    remoteRules.forEach((r, idx) => {
+      const provider = adaptRulesetForMihomo(r, idx);
+      doc['rule-providers'][provider.tag] = {
+        type: 'http',
+        behavior: provider.behavior,
+        format: provider.format,
+        path: provider.path,
+        url: provider.url,
+        interval: 86400,
+      };
+    });
+  }
+
+  // 3. Build Rules
+  const availableGroupNames = new Set<string>((doc['proxy-groups'] || []).map((g: any) => String(g.name)));
+  const fallbackGroup = (doc['proxy-groups'] || []).find((g: any) => g.name === '🚀 节点选择')?.name || doc['proxy-groups']?.[0]?.name || 'DIRECT';
+
+  const generatedRules: string[] = [];
+  localRules.forEach(r => {
+    const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
+    if (r.type === 'FINAL') {
+      // final rule at the end
+    } else if (r.payload.includes(',')) {
+      r.payload.split(',').forEach(p => {
+        const item = p.trim();
+        if (item) {
+          if (r.type === 'SRC-IP-CIDR') {
+            generatedRules.push(`SRC-IP-CIDR,${formatCidr(item)},${safeOutbound}`);
+          } else {
+            generatedRules.push(`${r.type},${item},${safeOutbound}`);
+          }
+        }
+      });
+    } else {
+      const item = r.payload.trim();
+      if (r.type === 'SRC-IP-CIDR') {
+        generatedRules.push(`SRC-IP-CIDR,${formatCidr(item)},${safeOutbound}`);
+      } else {
+        generatedRules.push(`${r.type},${item},${safeOutbound}`);
+      }
+    }
+  });
+
+  remoteRules.forEach((r, idx) => {
+    const tag = formatRuleTag(r, idx);
+    const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
+    generatedRules.push(`RULE-SET,${tag},${safeOutbound}`);
+  });
+
+  const existingRules = Array.isArray(doc.rules) ? doc.rules : [];
+  const existingPreRules = existingRules.filter((r: any) => typeof r === 'string' && !r.trim().toUpperCase().startsWith('MATCH,'));
+  const existingMatch = existingRules.find((r: any) => typeof r === 'string' && r.trim().toUpperCase().startsWith('MATCH,'));
+
+  const finalMatch = existingMatch || (availableGroupNames.has('🐟 漏网之鱼') ? 'MATCH,🐟 漏网之鱼' : `MATCH,${fallbackGroup}`);
+
+  const postRules = Array.isArray(doc.post_rules)
+    ? doc.post_rules
+    : Array.isArray(doc['post-rules'])
+    ? doc['post-rules']
+    : [];
+  delete doc.post_rules;
+  delete doc['post-rules'];
+
+  doc.rules = [...existingPreRules, ...generatedRules, ...postRules, finalMatch];
+
+  return doc;
+}

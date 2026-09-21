@@ -1,5 +1,6 @@
 import { ProxyNode, ProxyGroupItem, UnifiedRuleItem, SubscriptionSource } from '../../types/index.js';
-import { injectUnifiedToShadowrocket } from './rule-injector.js';
+import { adaptRulesetForShadowrocket, formatRuleTag } from './ruleset-adapter.js';
+import { resolveSafeOutbound, formatCidr, cleanSourceOrGroupName, formatSourceGroupTag } from './common.js';
 
 export function nodeToShadowrocketProxy(node: ProxyNode): string {
   const name = node.name.replace(/[=,]/g, '_');
@@ -348,4 +349,249 @@ export function generateShadowrocketConfig(
 
   const baseConfig = resultLines.join('\n');
   return injectUnifiedToShadowrocket(baseConfig, nodes, proxyGroups, rulesList, sources, options);
+}
+
+export function injectUnifiedToShadowrocket(
+  templateConf: string,
+  nodes: ProxyNode[],
+  proxyGroups: ProxyGroupItem[],
+  rulesList: UnifiedRuleItem[],
+  sources: SubscriptionSource[] = [],
+  options?: { expandNodes?: boolean }
+): string {
+  const expandNodes = Boolean(options?.expandNodes);
+  const lines = templateConf.split('\n');
+  const activeRules = rulesList.filter(r => r.enabled);
+  const remoteRules = activeRules.filter(r => r.kind === 'remote');
+  const localRules = activeRules.filter(r => r.kind === 'local');
+
+  const customSources = sources.filter(s => s.type === 'custom' || s.id === 'custom');
+  const customTagName = customSources[0]?.name
+    ? (customSources[0].name.startsWith('⚡️') ? customSources[0].name : `⚡️ ${customSources[0].name}`)
+    : '⚡️ 自建节点';
+
+  const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
+    ...g,
+    proxies: g.proxies ? [...g.proxies] : undefined,
+    use: g.use ? [...g.use] : undefined,
+  }));
+
+  // Sanitize effectiveGroups: if there is a custom group, sync its name to customTagName and remove any stale '⚡️ 独立节点组'
+  const customGrp = effectiveGroups.find(g =>
+    g.id === 'grp-src-custom' ||
+    g.name === customTagName ||
+    g.name === '⚡️ 独立节点组' ||
+    g.name === '独立节点组'
+  );
+  if (customGrp) {
+    customGrp.name = customTagName;
+    customGrp.use = [customSources[0]?.name || '自建节点'];
+    const idx = effectiveGroups.indexOf(customGrp);
+    for (let i = effectiveGroups.length - 1; i >= 0; i--) {
+      if (i !== idx) {
+        const g = effectiveGroups[i];
+        if (g.id === 'grp-src-custom' || g.name === '⚡️ 独立节点组' || g.name === '独立节点组') {
+          effectiveGroups.splice(i, 1);
+        }
+      }
+    }
+    effectiveGroups.forEach(grp => {
+      if (grp !== customGrp) {
+        if (grp.use) {
+          grp.use = grp.use.map(u => (u === '独立节点组' || u === '⚡️ 独立节点组' ? (customSources[0]?.name || '自建节点') : u));
+        }
+        if (grp.proxies) {
+          grp.proxies = grp.proxies.map(p => (p === '⚡️ 独立节点组' || p === '独立节点组' ? customTagName : p));
+        }
+      }
+    });
+  }
+
+  const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.url && s.url.startsWith('http'));
+  const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
+  const customNodeNames = customNodes.map(n => n.name.replace(/[=,]/g, '_'));
+  const allNodeNames = nodes.map(n => n.name.replace(/[=,]/g, '_'));
+
+  // 1. Build [Proxy Group]
+  const groupLines: string[] = [];
+  const existingGroupNames = new Set<string>();
+
+  effectiveGroups.forEach(grp => {
+    existingGroupNames.add(grp.name.toLowerCase());
+    let members: string[] = [];
+
+    if (grp.use && grp.use.length > 0) {
+      grp.use.forEach(u => {
+        const customSrc = sources.find(s => (s.type === 'custom' || s.id === 'custom') && (s.name === u || s.id === u));
+        const isCustomU = u === '自建节点' || u === '独立节点组' || u === 'custom' || u === '手工自建' || customSources.some(cs => cs.name === u);
+        if (customSrc || isCustomU) {
+          const groupNodes = nodes
+            .filter(n => n.sourceId === (customSrc?.id || 'custom') || n.sourceName === (customSrc?.name || u) || (!n.sourceId && isCustomU))
+            .map(n => n.name.replace(/[=,]/g, '_'));
+          members.push(...(groupNodes.length > 0 ? groupNodes : customNodeNames));
+        } else {
+          const cleanU = u.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+          const matchedSrc = sources.find(s => {
+            const sClean = s.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+            return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
+          });
+          if (matchedSrc) {
+            const isRemoteNetwork = matchedSrc.enabled && matchedSrc.type !== 'custom' && matchedSrc.type !== 'filter' && matchedSrc.url && matchedSrc.url.startsWith('http');
+            if (!isRemoteNetwork || expandNodes) {
+              let srcNodes: string[] = [];
+              if (Array.isArray(matchedSrc.nodes) && matchedSrc.nodes.length > 0) {
+                srcNodes = matchedSrc.nodes.map(n => n.name.replace(/[=,]/g, '_'));
+              } else {
+                srcNodes = nodes
+                  .filter(n => {
+                    const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
+                    const sId = (n.sourceId || '').trim().toLowerCase();
+                    return sName === cleanU || sId === cleanU;
+                  })
+                  .map(n => n.name.replace(/[=,]/g, '_'));
+              }
+              members.push(...srcNodes);
+            } else {
+              const sTag = matchedSrc.name.replace(/[=,]/g, '_').trim();
+              members.push(sTag.startsWith('⚡️') ? sTag : `⚡️ ${sTag}`);
+            }
+          }
+        }
+      });
+    }
+
+    if (grp.proxies && grp.proxies.length > 0) {
+      grp.proxies.forEach(p => {
+        if (p === 'DIRECT' || p === '🎯 本地直连') {
+          members.push('DIRECT');
+        } else if (p === 'REJECT' || p === '🛑 广告拦截' || p === '🛑 全局拦截') {
+          members.push('REJECT');
+        } else {
+          const cleanP = (p === '⚡️ 独立节点组' || p === '独立节点组') ? customTagName : p;
+          members.push(cleanP.replace(/[=,]/g, '_'));
+        }
+      });
+    }
+
+    if (grp.filter) {
+      try {
+        const reg = new RegExp(grp.filter, 'i');
+        const matched = nodes
+          .filter(n => reg.test(n.name))
+          .map(n => n.name.replace(/[=,]/g, '_'));
+        members.push(...matched);
+      } catch (e) {
+        // ignore regex error
+      }
+    }
+
+    members = Array.from(new Set(members)).filter(Boolean);
+
+    if (members.length === 0) {
+      if (allNodeNames.length > 0) {
+        members.push(allNodeNames[0]);
+      } else {
+        members.push('DIRECT');
+      }
+    }
+
+    const grpType = grp.type === 'urltest' ? 'url-test' : (grp.type === 'fallback' ? 'fallback' : 'select');
+    if (grpType === 'url-test') {
+      groupLines.push(`${grp.name} = url-test, ${members.join(', ')}, url=${grp.url || 'http://cp.cloudflare.com/generate_204'}, interval=${grp.interval || 300}, tolerance=${grp.tolerance || 50}`);
+    } else if (grpType === 'fallback') {
+      groupLines.push(`${grp.name} = fallback, ${members.join(', ')}, url=${grp.url || 'http://cp.cloudflare.com/generate_204'}, interval=${grp.interval || 300}`);
+    } else {
+      groupLines.push(`${grp.name} = select, ${members.join(', ')}`);
+    }
+  });
+
+  if (customNodes.length > 0 && !effectiveGroups.some(g => g.id === 'grp-src-custom' || g.name.includes('自建') || g.name.includes('独立') || customSources.some(cs => g.name.includes(cs.name)))) {
+    groupLines.push(`${customTagName} = select, ${customNodeNames.join(', ')}`);
+  }
+
+  // 2. Build [Rule]
+  const availableGroupNames = new Set(proxyGroups.map(g => g.name));
+  const fallbackGroup = proxyGroups.find(g => g.name === '🚀 节点选择')?.name || proxyGroups[0]?.name || 'DIRECT';
+
+  const ruleLines: string[] = [];
+
+  remoteRules.forEach((r, idx) => {
+    const adapted = adaptRulesetForShadowrocket(r, idx);
+    const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
+    ruleLines.push(`RULE-SET,${adapted.url},${safeOutbound}`);
+  });
+
+  localRules.forEach(r => {
+    if (r.type === 'FINAL') {
+      return;
+    }
+    const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
+    const payloads = r.payload.split(/[,;\n]+/).map(p => p.trim()).filter(Boolean);
+    payloads.forEach(p => {
+      if (r.type === 'IP-CIDR') {
+        ruleLines.push(`IP-CIDR,${p},${safeOutbound},no-resolve`);
+      } else if (r.type === 'SRC-IP-CIDR') {
+        ruleLines.push(`SRC-IP-CIDR,${formatCidr(p)},${safeOutbound},no-resolve`);
+      } else {
+        ruleLines.push(`${r.type},${p},${safeOutbound}`);
+      }
+    });
+  });
+
+  const finalRule = activeRules.find(r => r.type === 'FINAL');
+  const finalOutbound = finalRule
+    ? resolveSafeOutbound(finalRule.outbound, availableGroupNames, fallbackGroup)
+    : (availableGroupNames.has('🐟 漏网之鱼') ? '🐟 漏网之鱼' : fallbackGroup);
+  ruleLines.push(`FINAL,${finalOutbound}`);
+
+  const result: string[] = [];
+  let inRuleSection = false;
+  let hasHandledRule = false;
+  let inGroupSection = false;
+  let hasHandledGroup = false;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+
+    if (trimmed === '[Rule]') {
+      inRuleSection = true;
+      hasHandledRule = true;
+      result.push(line);
+      result.push(...ruleLines);
+      continue;
+    }
+
+    if (trimmed === '[Proxy Group]') {
+      inGroupSection = true;
+      hasHandledGroup = true;
+      result.push(line);
+      result.push(...groupLines);
+      continue;
+    }
+
+    if (inRuleSection && trimmed.startsWith('[')) {
+      inRuleSection = false;
+    }
+    if (inGroupSection && trimmed.startsWith('[')) {
+      inGroupSection = false;
+    }
+
+    if (inRuleSection || inGroupSection) {
+      continue;
+    }
+
+    result.push(line);
+  }
+
+  if (!hasHandledGroup && groupLines.length > 0) {
+    result.push('\n[Proxy Group]');
+    result.push(...groupLines);
+  }
+
+  if (!hasHandledRule && ruleLines.length > 0) {
+    result.push('\n[Rule]');
+    result.push(...ruleLines);
+  }
+
+  return result.join('\n');
 }
