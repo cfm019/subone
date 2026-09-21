@@ -251,7 +251,7 @@ export function injectUnifiedToQuantumultX(
   const lines = templateConf.split('\n');
   const activeRules = rulesList.filter(r => r.enabled);
   const remoteRules = activeRules.filter(r => r.kind === 'remote');
-  const localRules = activeRules.filter(r => r.kind === 'local');
+  const localRules = activeRules.filter(r => r.kind === 'local' && r.type !== 'FINAL');
 
   const effectiveGroups: ProxyGroupItem[] = proxyGroups.map(g => ({
     ...g,
@@ -521,15 +521,14 @@ export function injectUnifiedToQuantumultX(
   });
 
   // 4. Build [filter_local]
+  const availableGroupNames = new Set(effectiveGroups.map(g => g.name));
+  const fallbackGroup = effectiveGroups.find(g => g.name === '🚀 节点选择')?.name || effectiveGroups[0]?.name || 'direct';
+
   const localRuleLines: string[] = [];
   localRules.forEach(r => {
-    const targetGroup = resolveSafeOutbound(r.outbound, new Set(effectiveGroups.map(g => g.name)), '🚀 节点选择');
+    const targetGroup = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
     const out = targetGroup === '🎯 本地直连' || targetGroup.toUpperCase() === 'DIRECT' ? 'direct' : (targetGroup.toUpperCase() === 'REJECT' ? 'reject' : targetGroup);
 
-    if (r.type === 'FINAL') {
-      localRuleLines.push(`final, ${out}`);
-      return;
-    }
     let qxRuleType = 'host-suffix';
     if (r.type === 'DOMAIN') qxRuleType = 'host';
     else if (r.type === 'DOMAIN-SUFFIX') qxRuleType = 'host-suffix';
@@ -541,6 +540,15 @@ export function injectUnifiedToQuantumultX(
     localRuleLines.push(`${qxRuleType}, ${r.payload.trim()}, ${out}`);
   });
 
+  const finalRule = activeRules.find(r => r.type === 'FINAL');
+  const rawFinalTarget = finalRule
+    ? resolveSafeOutbound(finalRule.outbound, availableGroupNames, fallbackGroup)
+    : (availableGroupNames.has('🐟 漏网之鱼') ? '🐟 漏网之鱼' : fallbackGroup);
+  const finalOut = rawFinalTarget === '🎯 本地直连' || rawFinalTarget.toUpperCase() === 'DIRECT'
+    ? 'direct'
+    : (rawFinalTarget.toUpperCase() === 'REJECT' ? 'reject' : rawFinalTarget);
+  localRuleLines.push(`final, ${finalOut}`);
+
   // 5. Assemble config
   const result: string[] = [];
   let hasHandledServerRemote = false;
@@ -551,6 +559,11 @@ export function injectUnifiedToQuantumultX(
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     const trimmed = line.trim().toLowerCase();
+
+    // Ignore hardcoded final lines from template to prevent duplicate final entries
+    if (trimmed.startsWith('final=') || trimmed.startsWith('final,') || trimmed === 'final') {
+      continue;
+    }
 
     if (trimmed === '[server_remote]') {
       hasHandledServerRemote = true;
