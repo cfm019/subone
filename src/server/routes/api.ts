@@ -354,14 +354,14 @@ apiRouter.post('/api/sources', async (req, res) => {
   }
 });
 
-apiRouter.put('/api/sources/:id', (req, res) => {
+apiRouter.put('/api/sources/:id', async (req, res) => {
   const index = appConfig.sources.findIndex(s => s.id === req.params.id);
   if (index === -1) {
     return res.status(404).json({ success: false, message: 'Source not found' });
   }
   const oldSource = appConfig.sources[index];
   const oldName = cleanSourceOrGroupName(oldSource.name || '');
-  const newName = cleanSourceOrGroupName(req.body.name || '');
+  const newName = req.body.name ? cleanSourceOrGroupName(req.body.name) : oldName;
 
   // If source name changed, synchronize nodes and all proxyGroups
   if (newName && newName !== oldName) {
@@ -396,6 +396,26 @@ apiRouter.put('/api/sources/:id', (req, res) => {
     }
   }
 
+  // If URL or format type changed for network subscriptions, re-fetch nodes
+  const urlChanged = req.body.url && req.body.url.trim() !== oldSource.url;
+  const typeChanged = req.body.type && req.body.type !== oldSource.type;
+  if ((urlChanged || typeChanged) && oldSource.type !== 'custom' && oldSource.type !== 'filter') {
+    const updatedUrl = (req.body.url ? req.body.url.trim() : oldSource.url) || '';
+    if (updatedUrl.startsWith('http://') || updatedUrl.startsWith('https://')) {
+      try {
+        console.log(`[Fetcher] Fetching nodes for updated source [${newName || oldSource.name}]: ${updatedUrl}`);
+        const tempSource = { ...oldSource, ...req.body, name: newName || oldSource.name, url: updatedUrl };
+        const nodes = await fetchAndParseSource(tempSource, appConfig.countryRules);
+        req.body.nodes = nodes;
+        req.body.nodeCount = nodes.length;
+        req.body.lastUpdated = new Date().toISOString();
+        console.log(`[Fetcher] Successfully updated ${nodes.length} nodes for source [${newName || oldSource.name}]`);
+      } catch (err: any) {
+        console.error(`[Fetcher] Failed to fetch updated source URL:`, err.message || err);
+      }
+    }
+  }
+
   appConfig.sources[index] = { ...appConfig.sources[index], ...req.body };
   ensureCustomProxyGroup(appConfig);
   ensureAllSourceProxyGroups(appConfig);
@@ -419,6 +439,13 @@ apiRouter.delete('/api/sources/:id', (req, res) => {
     appConfig.proxyGroups.forEach(grp => {
       if (grp.use) grp.use = grp.use.filter(u => cleanSourceOrGroupName(u).toLowerCase() !== sClean);
       if (grp.proxies) grp.proxies = grp.proxies.filter(p => cleanSourceOrGroupName(p).toLowerCase() !== sClean);
+    });
+
+    // Clean up parentSourceIds references in filter sources
+    appConfig.sources.forEach(s => {
+      if (s.type === 'filter' && s.filterConfig?.parentSourceIds) {
+        s.filterConfig.parentSourceIds = s.filterConfig.parentSourceIds.filter(id => id !== req.params.id);
+      }
     });
   }
 

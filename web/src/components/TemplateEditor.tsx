@@ -253,7 +253,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
               <FileCode className="w-4 h-4 text-[#CC785C]" />
               <span className="text-xs font-bold text-[#1F1E1D]">模版配置骨架 </span>
             </div>
-            <span className="text-[11px] text-[#8C877D]">保存后将实时注入节点与规则</span>
+            <span className="text-[11px] text-[#8C877D]">保存后将注入节点与规则</span>
           </div>
           <div className="flex-1 relative min-h-0 w-full h-full bg-white">
             <textarea
@@ -272,7 +272,7 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
             <div className="flex items-center gap-2">
               <Eye className="w-4 h-4 text-[#367A68]" />
               <span className="text-xs font-bold text-[#1F1E1D]">
-                实时合成预览 ({previewNodeCount} 节点已注入)
+                合成预览 ({previewNodeCount} 节点已注入)
               </span>
             </div>
             <div className="flex items-center gap-1.5">

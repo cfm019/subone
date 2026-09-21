@@ -49,6 +49,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 }) => {
   // Modal states
   const [showAddNetworkModal, setShowAddNetworkModal] = useState(false);
+  const [editingNetworkSource, setEditingNetworkSource] = useState<SubscriptionSource | null>(null);
   const [showImportNodesModal, setShowImportNodesModal] = useState(false);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [showFilterGroupModal, setShowFilterGroupModal] = useState(false);
@@ -73,7 +74,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   // Network source form states
   const [newNetworkName, setNewNetworkName] = useState('');
   const [newNetworkUrl, setNewNetworkUrl] = useState('');
-  const [newNetworkType, setNewNetworkType] = useState('auto');
+  const [newNetworkType, setNewNetworkType] = useState<NonNullable<SubscriptionSource['type']>>('auto');
 
   // Loading & Action states
   const [refreshingId, setRefreshingId] = useState<string | null>(null);
@@ -217,22 +218,41 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
     setShowImportNodesModal(true);
   };
 
-  // Submit network source
+  // Open edit modal for network source
+  const handleOpenEditNetworkModal = (source: SubscriptionSource) => {
+    setEditingNetworkSource(source);
+    setNewNetworkName(source.name);
+    setNewNetworkUrl(source.url || '');
+    setNewNetworkType(source.type || 'auto');
+    setShowAddNetworkModal(true);
+  };
+
+  // Submit network source (create or edit)
   const handleAddNetworkSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNetworkName.trim() || !newNetworkUrl.trim()) return;
     setIsSubmitting(true);
     try {
-      await onAddSource({
-        name: newNetworkName.trim(),
-        url: newNetworkUrl.trim(),
-        type: newNetworkType,
-      });
+      if (editingNetworkSource) {
+        await onUpdateSource(editingNetworkSource.id, {
+          name: newNetworkName.trim(),
+          url: newNetworkUrl.trim(),
+          type: newNetworkType,
+        });
+      } else {
+        await onAddSource({
+          name: newNetworkName.trim(),
+          url: newNetworkUrl.trim(),
+          type: newNetworkType,
+        });
+      }
       setNewNetworkName('');
       setNewNetworkUrl('');
+      setNewNetworkType('auto');
+      setEditingNetworkSource(null);
       setShowAddNetworkModal(false);
     } catch (err: any) {
-      console.error('Failed to add network source:', err);
+      console.error('Failed to save network source:', err);
     } finally {
       setIsSubmitting(false);
     }
@@ -380,7 +400,13 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
           </button>
 
           <button
-            onClick={() => setShowAddNetworkModal(true)}
+            onClick={() => {
+              setEditingNetworkSource(null);
+              setNewNetworkName('');
+              setNewNetworkUrl('');
+              setNewNetworkType('auto');
+              setShowAddNetworkModal(true);
+            }}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-claude-secondary rounded-xl shadow-2xs cursor-pointer"
           >
             <Plus className="w-3.5 h-3.5 stroke-[2.5]" />
@@ -616,6 +642,15 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                   {!isCustom && !isFilter && (
                     <>
                       <button
+                        onClick={() => handleOpenEditNetworkModal(source)}
+                        className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-[#69655E] bg-[#EFEAE2] hover:bg-[#E5DFD5] rounded-lg transition-colors cursor-pointer"
+                        title="编辑订阅源（名称、链接或解析模式）"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>编辑</span>
+                      </button>
+
+                      <button
                         onClick={() => handleSingleRefresh(source.id)}
                         disabled={isThisRefreshing}
                         className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium btn-claude-secondary rounded-lg disabled:opacity-50 cursor-pointer"
@@ -799,18 +834,25 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
         )}
       </div>
 
-      {/* 弹窗 1：添加网络机场订阅弹窗 */}
+      {/* 弹窗 1：添加/编辑网络机场订阅弹窗 */}
       {showAddNetworkModal && (
         <div className="fixed inset-0 z-50 bg-black/30 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl border border-[#E3DDD2] shadow-xl w-full max-w-md p-5 space-y-4 animate-in fade-in zoom-in-95 duration-150">
             <div className="flex items-center justify-between pb-3 border-b border-[#F0ECE4]">
               <div>
-                <h3 className="text-sm font-bold text-[#1F1E1D]">添加网络订阅源</h3>
-                <p className="text-[11px] text-[#78746D]">支持 HTTP/HTTPS 机场订阅链接，添加后自动解析</p>
+                <h3 className="text-sm font-bold text-[#1F1E1D]">
+                  {editingNetworkSource ? '编辑网络订阅源' : '添加网络订阅源'}
+                </h3>
+                <p className="text-[11px] text-[#78746D]">
+                  {editingNetworkSource ? '修改订阅名称、链接地址或格式解析模式' : '支持 HTTP/HTTPS 机场订阅链接，添加后自动解析'}
+                </p>
               </div>
               <button
-                onClick={() => setShowAddNetworkModal(false)}
-                className="text-xs text-[#9E9A91] hover:text-[#1F1E1D] p-1"
+                onClick={() => {
+                  setShowAddNetworkModal(false);
+                  setEditingNetworkSource(null);
+                }}
+                className="text-xs text-[#9E9A91] hover:text-[#1F1E1D] p-1 cursor-pointer"
               >
                 ✕
               </button>
@@ -845,7 +887,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 <label className="block text-xs font-semibold text-[#1F1E1D] mb-1">格式解析模式</label>
                 <select
                   value={newNetworkType}
-                  onChange={e => setNewNetworkType(e.target.value)}
+                  onChange={e => setNewNetworkType(e.target.value as NonNullable<SubscriptionSource['type']>)}
                   className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
                 >
                   <option value="auto">自动识别 (Auto)</option>
@@ -858,17 +900,20 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
               <div className="flex justify-end gap-2 pt-2">
                 <button
                   type="button"
-                  onClick={() => setShowAddNetworkModal(false)}
-                  className="px-3.5 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl"
+                  onClick={() => {
+                    setShowAddNetworkModal(false);
+                    setEditingNetworkSource(null);
+                  }}
+                  className="px-3.5 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl cursor-pointer"
                 >
                   取消
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-4 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl disabled:opacity-50"
+                  className="px-4 py-1.5 text-xs font-semibold btn-claude-primary rounded-xl disabled:opacity-50 cursor-pointer"
                 >
-                  {isSubmitting ? '正在拉取...' : '添加并拉取'}
+                  {isSubmitting ? '保存中...' : (editingNetworkSource ? '保存更改' : '添加并拉取')}
                 </button>
               </div>
             </form>
@@ -1249,11 +1294,11 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 />
               </div>
 
-              {/* 5. 实时匹配预览 */}
+              {/* 5. 匹配预览 */}
               <div className="p-3 bg-white border border-[#E3DDD2] rounded-xl space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-xs font-bold text-[#1F1E1D]">
-                    实时匹配预览 ({previewFilteredNodes.length} 个节点)
+                    匹配预览 ({previewFilteredNodes.length} 个节点)
                   </span>
                 </div>
                 <div className="max-h-36 overflow-y-auto space-y-1.5 pr-1">

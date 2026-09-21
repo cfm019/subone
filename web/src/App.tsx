@@ -386,7 +386,11 @@ export function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(updates),
       });
-      if (!res.ok) await fetchConfigOnly();
+      if (res.ok) {
+        await fetchData();
+      } else {
+        await fetchConfigOnly();
+      }
     } catch (err: any) {
       console.error('handleUpdateSource error:', err);
       await fetchConfigOnly();
