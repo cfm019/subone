@@ -76,7 +76,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           },
         });
         if (ok) {
-          setIconMsg({ type: 'success', text: '图标配置已成功保存并同步到 config.json！' });
+          setIconMsg({ type: 'success', text: '图标配置已成功保存并立即生效！' });
         } else {
           setIconMsg({ type: 'error', text: '保存失败，请检查网络或控制台错误' });
         }
@@ -109,7 +109,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </div>
 
           <p className="text-xs text-[#8C877D] leading-relaxed">
-            设置用于区分源类型的前缀图标（自建、过滤源、机场订阅）。配置会自动同步保存在根目录 <code className="px-1 py-0.5 rounded bg-[#F4EFE6] text-[#CC785C] font-mono text-[11px]">config.json</code> 中。
+            设置用于区分源类型的前缀图标（自建、过滤源、机场订阅）。保存后将实时自动同步所有策略组命名及引用。
           </p>
 
           {iconMsg && (

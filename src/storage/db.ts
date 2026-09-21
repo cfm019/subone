@@ -230,6 +230,12 @@ export function loadConfig(): AppConfig {
         profiles = [defaultProfile];
       }
 
+      const sourceIcons = parsed.settings?.sourceIcons || serverConfig.sourceIcons || {
+        custom: '🖥️',
+        filter: '✨',
+        remote: '⚡️',
+      };
+
       const config: AppConfig = {
         sources,
         rules: Array.isArray(parsed.rules) ? parsed.rules : [],
@@ -243,7 +249,7 @@ export function loadConfig(): AppConfig {
           subToken: serverConfig.subToken,
           adminPassword: serverConfig.adminPassword,
           port: serverConfig.port,
-          sourceIcons: serverConfig.sourceIcons,
+          sourceIcons,
         },
       };
 
@@ -332,7 +338,9 @@ export function saveConfig(config: AppConfig): void {
       proxyGroups: config.proxyGroups,
       rulesList: config.rulesList,
       profiles: config.profiles,
-      settings: {}
+      settings: {
+        sourceIcons: config.settings?.sourceIcons,
+      }
     };
 
     fs.writeFileSync(DATA_CONFIG_FILE, JSON.stringify(cleanToPersist, null, 2), 'utf-8');

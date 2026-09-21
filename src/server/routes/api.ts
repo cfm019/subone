@@ -69,15 +69,12 @@ apiRouter.post('/api/config/settings', (req, res) => {
   const { settings } = req.body;
   if (settings) {
     appConfig.settings = { ...appConfig.settings, ...settings };
+    ensureCustomSource(appConfig);
+    ensureCustomProxyGroup(appConfig);
+    ensureAllSourceProxyGroups(appConfig);
     saveConfig(appConfig);
-    saveServerConfig({
-      sourceIcons: appConfig.settings.sourceIcons,
-      adminPassword: appConfig.settings.adminPassword,
-      subToken: appConfig.settings.subToken,
-      port: appConfig.settings.port,
-    });
   }
-  res.json({ success: true, data: appConfig.settings });
+  res.json({ success: true, data: appConfig.settings, proxyGroups: appConfig.proxyGroups });
 });
 
 // 2. Custom Nodes Management (独立节点组专区)

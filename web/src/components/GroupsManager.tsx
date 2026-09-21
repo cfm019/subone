@@ -176,12 +176,12 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
 
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || !n.sourceId);
   const customSrc = sources.find(s => s.id === 'custom' || s.type === 'custom');
-  const customSourceName = cleanName(customSrc?.name || '独立节点组');
-  const customSourceTag = `🖥️ ${customSourceName}`;
+  const customSourceName = cleanName(customSrc?.name || '独立节点组', sourceIcons);
+  const customSourceTag = `${sourceIcons?.custom || '🖥️'} ${customSourceName}`;
 
   const standardOutbounds = ['🚀 节点选择', '🎯 本地直连', '♻️ 自动选择', '👉 手动选择'];
   const groupOutbounds = groups.map(g => g.name);
-  const sourceOutbounds = sources.filter(s => s.enabled).map(s => getSourceTag(s));
+  const sourceOutbounds = sources.filter(s => s.enabled).map(s => getSourceTag(s, sourceIcons));
 
   const allCandidateOutbounds = Array.from(new Set([
     ...standardOutbounds,
@@ -191,7 +191,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
   ]));
 
   const hasCustomGroup = groups.some(g => {
-    const clean = cleanName(g.name).toLowerCase();
+    const clean = cleanName(g.name, sourceIcons).toLowerCase();
     return clean === customSourceName.toLowerCase() || clean === '自建节点' || clean === '独立节点组' || clean === '手工自建' || clean === 'custom' || g.id === 'grp-src-custom';
   });
 
@@ -467,13 +467,14 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-medium text-[#9E9A91]">挂载订阅:</span>
                       {group.use!.map((u, idx) => {
-                        const cleanLabel = cleanName(u);
+                        const cleanLabel = cleanName(u, sourceIcons);
                         const count = getNodeCountForOutbound(u);
                         const matchedSrc = sources.find(
-                          s => cleanName(s.name).toLowerCase() === cleanLabel.toLowerCase() || s.id === u
+                          s => cleanName(s.name, sourceIcons).toLowerCase() === cleanLabel.toLowerCase() || s.id === u
                         );
                         const isFilterSrc = matchedSrc?.type === 'filter';
                         const isCustomSrc = matchedSrc?.type === 'custom' || matchedSrc?.id === 'custom';
+                        const icon = isFilterSrc ? (sourceIcons?.filter || '✨') : isCustomSrc ? (sourceIcons?.custom || '🖥️') : (sourceIcons?.remote || '⚡️');
                         return (
                           <span
                             key={idx}
@@ -485,7 +486,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                                 : 'bg-[#FAF0EC] border-[#F3DDD3] text-[#B85D3F]'
                             }`}
                           >
-                            <span className="text-xs">{isFilterSrc ? '✨' : isCustomSrc ? '🖥️' : '⚡️'}</span>
+                            <span className="text-xs">{icon}</span>
                             <span>{cleanLabel}</span>
                             {count !== null && (
                               <span className="text-[9px] font-bold opacity-80">({count}节点)</span>
@@ -803,11 +804,12 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
 
               {(() => {
                 // Deduplicate sources by normalized key
-                const sourceMap = new Map<string, { tag: string; label: string; nodeCount?: number; id: string }>();
+                const sourceMap = new Map<string, { tag: string; label: string; icon: string; nodeCount?: number; id: string }>();
                 sources.forEach(src => {
                   const isInternalCustom = src.id === 'custom' || src.type === 'custom';
-                  const label = cleanName(src.name) || (isInternalCustom ? '独立节点组' : src.name);
-                  const tag = getSourceTag(src);
+                  const label = cleanName(src.name, sourceIcons) || (isInternalCustom ? '独立节点组' : src.name);
+                  const tag = getSourceTag(src, sourceIcons);
+                  const icon = getSourcePrefix(src, sourceIcons);
                   const key = isInternalCustom ? 'custom' : label.toLowerCase();
                   const count = isInternalCustom ? customNodes.length : (src.nodeCount || src.nodes?.length || 0);
 
@@ -816,6 +818,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                       id: src.id,
                       tag,
                       label,
+                      icon,
                       nodeCount: count,
                     });
                   }
@@ -826,6 +829,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                     id: 'custom',
                     tag: customSourceTag,
                     label: customSourceName,
+                    icon: sourceIcons?.custom || '🖥️',
                     nodeCount: customNodes.length,
                   });
                 }
@@ -844,9 +848,9 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                     <div className="flex flex-wrap gap-2">
                       {uniqueSourceList.map(src => {
                         const isSelected = (formData.use || []).some(
-                          u => cleanName(u).toLowerCase() === src.label.toLowerCase() ||
+                          u => cleanName(u, sourceIcons).toLowerCase() === src.label.toLowerCase() ||
                             u.toLowerCase() === src.label.toLowerCase() ||
-                            (src.id === 'custom' && (cleanName(u) === '自建节点' || cleanName(u) === '独立节点组' || cleanName(u) === '手工自建' || u === 'custom'))
+                            (src.id === 'custom' && (cleanName(u, sourceIcons) === '自建节点' || cleanName(u, sourceIcons) === '独立节点组' || cleanName(u, sourceIcons) === '手工自建' || u === 'custom'))
                         );
                         return (
                           <button
@@ -858,7 +862,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                               : 'bg-white text-[#59554E] border-[#E3DDD2] hover:border-[#CC785C]/60'
                               }`}
                           >
-                            <Zap className="w-3 h-3" />
+                            <span className="text-xs">{src.icon}</span>
                             <span>{src.label}</span>
                             {src.nodeCount !== undefined && (
                               <span className="opacity-80 text-[10px]">({src.nodeCount}节点)</span>
