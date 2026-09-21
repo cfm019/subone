@@ -70,6 +70,12 @@ apiRouter.post('/api/config/settings', (req, res) => {
   if (settings) {
     appConfig.settings = { ...appConfig.settings, ...settings };
     saveConfig(appConfig);
+    saveServerConfig({
+      sourceIcons: appConfig.settings.sourceIcons,
+      adminPassword: appConfig.settings.adminPassword,
+      subToken: appConfig.settings.subToken,
+      port: appConfig.settings.port,
+    });
   }
   res.json({ success: true, data: appConfig.settings });
 });

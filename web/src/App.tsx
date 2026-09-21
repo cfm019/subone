@@ -154,6 +154,19 @@ export function App() {
     return false;
   };
 
+  const handleUpdateSettings = async (settings: Partial<AppConfig['settings']>): Promise<boolean> => {
+    const res = await apiFetch(`${API_BASE}/config/settings`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings }),
+    });
+    if (res.ok) {
+      await fetchData();
+      return true;
+    }
+    return false;
+  };
+
   const handleRegenerateSubToken = async (): Promise<string | null> => {
     const res = await apiFetch(`${API_BASE}/settings/regenerate-sub-token`, { method: 'POST' });
     if (res.ok) {
@@ -796,6 +809,7 @@ export function App() {
             groups={config.proxyGroups || []}
             sources={config.sources || []}
             nodes={nodes}
+            sourceIcons={config.settings?.sourceIcons}
             onAddGroup={handleAddGroup}
             onUpdateGroup={handleUpdateGroup}
             onDeleteGroup={handleDeleteGroup}
@@ -836,6 +850,7 @@ export function App() {
           config={config}
           onClose={() => setShowSettings(false)}
           onChangePassword={handleChangePassword}
+          onUpdateSettings={handleUpdateSettings}
         />
       )}
     </div>

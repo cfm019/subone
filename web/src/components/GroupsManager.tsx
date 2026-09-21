@@ -18,35 +18,56 @@ import {
   Eye,
 } from 'lucide-react';
 import * as yaml from 'js-yaml';
-import { ProxyGroupItem, SubscriptionSource, ProxyNode } from '../types';
+import { ProxyGroupItem, SubscriptionSource, ProxyNode, SourceIconsConfig } from '../types';
 
 interface GroupsManagerProps {
   groups: ProxyGroupItem[];
   sources?: SubscriptionSource[];
   nodes?: ProxyNode[];
+  sourceIcons?: SourceIconsConfig;
   onAddGroup: (group: Partial<ProxyGroupItem>) => Promise<void>;
   onUpdateGroup: (id: string, group: Partial<ProxyGroupItem>) => Promise<void>;
   onDeleteGroup: (id: string) => Promise<void>;
   onBatchImportGroups: (text: string, replaceAll?: boolean) => Promise<void>;
 }
 
-export const cleanName = (name: string) => (name || '').replace(/^[🖥️✨⚡️\s]+/, '').trim();
-export const getSourcePrefix = (s: { id?: string; type?: string }) => {
-  if (s.id === 'custom' || s.type === 'custom') return '🖥️';
-  if (s.type === 'filter') return '✨';
-  return '⚡️';
+export const cleanName = (name: string, icons?: SourceIconsConfig) => {
+  if (!name) return '';
+  let cleaned = name;
+  if (icons) {
+    for (const icon of [icons.custom, icons.filter, icons.remote]) {
+      if (icon && cleaned.startsWith(icon)) {
+        cleaned = cleaned.slice(icon.length).trim();
+      }
+    }
+  }
+  return cleaned.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '').trim();
 };
-export const getSourceTag = (s: SubscriptionSource) => {
+
+export const getSourcePrefix = (
+  s: { id?: string; type?: string },
+  icons?: SourceIconsConfig
+) => {
+  const customIcon = icons?.custom || '🖥️';
+  const filterIcon = icons?.filter || '✨';
+  const remoteIcon = icons?.remote || '⚡️';
+  if (s.id === 'custom' || s.type === 'custom') return customIcon;
+  if (s.type === 'filter') return filterIcon;
+  return remoteIcon;
+};
+
+export const getSourceTag = (s: SubscriptionSource, icons?: SourceIconsConfig) => {
   const isCustom = s.id === 'custom' || s.type === 'custom';
-  const label = cleanName(s.name) || (isCustom ? '独立节点组' : s.name);
-  const prefix = getSourcePrefix(s);
+  const label = cleanName(s.name, icons) || (isCustom ? '独立节点组' : s.name);
+  const prefix = getSourcePrefix(s, icons);
   return `${prefix} ${label}`;
 };
 
 export function resolveNodesForGroup(
   group: ProxyGroupItem,
   allNodes: ProxyNode[] = [],
-  sources: SubscriptionSource[] = []
+  sources: SubscriptionSource[] = [],
+  icons?: SourceIconsConfig
 ): ProxyNode[] {
   if (!allNodes || allNodes.length === 0) return [];
 
@@ -61,25 +82,52 @@ export function resolveNodesForGroup(
     }
   }
 
-  // 2. If use is defined (e.g. use: ['自建'] or use: ['🖥️ 独立节点组'] or use: ['custom'])
+  // 2. If use is defined (e.g. use: ['自建'] or use: ['🖥️ 独立节点组'] or use: ['HK优选'])
   if (group.use && group.use.length > 0) {
+    const matchedNodes: ProxyNode[] = [];
+    const matchedNodeIds = new Set<string>();
+
+    for (const u of group.use) {
+      const uClean = cleanName(u, icons).toLowerCase();
+      const matchedSrc = sources.find(
+        s => cleanName(s.name, icons).toLowerCase() === uClean ||
+             s.id.toLowerCase() === uClean ||
+             (s.id === 'custom' && (uClean === '自建节点' || uClean === '独立节点组' || uClean === '手工自建' || uClean === 'custom'))
+      );
+      if (matchedSrc && Array.isArray(matchedSrc.nodes) && matchedSrc.nodes.length > 0) {
+        matchedSrc.nodes.forEach(n => {
+          if (!matchedNodeIds.has(n.id)) {
+            matchedNodes.push(n);
+            matchedNodeIds.add(n.id);
+          }
+        });
+      }
+    }
+
+    if (matchedNodes.length > 0) {
+      return matchedNodes;
+    }
+
     const useNormalized = new Set(
-      group.use.map(u => cleanName(u).toLowerCase())
+      group.use.map(u => cleanName(u, icons).toLowerCase())
     );
     return allNodes.filter(n => {
-      const srcName = cleanName(n.sourceName || '').toLowerCase();
+      const srcName = cleanName(n.sourceName || '', icons).toLowerCase();
       const srcId = (n.sourceId || '').trim().toLowerCase();
       return useNormalized.has(srcName) || useNormalized.has(srcId) || (srcId === 'custom' && (useNormalized.has('自建节点') || useNormalized.has('独立节点组') || useNormalized.has('手工自建')));
     });
   }
 
-  // 3. Match group name to source name (e.g. group named "🖥️ 独立节点组" or "独立节点组")
-  const cleanGroupName = cleanName(group.name).toLowerCase();
+  // 3. Match group name to source name (e.g. group named "✨ HK优选" or "🖥️ 独立节点组")
+  const cleanGroupName = cleanName(group.name, icons).toLowerCase();
   const matchedSource = sources.find(
-    s => cleanName(s.name).toLowerCase() === cleanGroupName ||
-      (s.id === 'custom' && (cleanGroupName === '自建节点' || cleanGroupName === '独立节点组' || cleanGroupName === '手工自建' || cleanGroupName === 'custom' || cleanName(s.name).toLowerCase() === cleanGroupName))
+    s => cleanName(s.name, icons).toLowerCase() === cleanGroupName ||
+      (s.id === 'custom' && (cleanGroupName === '自建节点' || cleanGroupName === '独立节点组' || cleanGroupName === '手工自建' || cleanGroupName === 'custom' || cleanName(s.name, icons).toLowerCase() === cleanGroupName))
   );
   if (matchedSource) {
+    if (Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
+      return matchedSource.nodes;
+    }
     return allNodes.filter(n => n.sourceId === matchedSource.id || n.sourceName === matchedSource.name);
   }
 
@@ -102,6 +150,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
   groups,
   sources = [],
   nodes = [],
+  sourceIcons,
   onAddGroup,
   onUpdateGroup,
   onDeleteGroup,
@@ -289,12 +338,12 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     if (outboundName === '🎯 本地直连') return null;
     const targetGroup = groups.find(g => g.name === outboundName);
     if (targetGroup) {
-      const gNodes = resolveNodesForGroup(targetGroup, nodes, sources);
+      const gNodes = resolveNodesForGroup(targetGroup, nodes, sources, sourceIcons);
       return gNodes.length;
     }
-    const cleanOutbound = cleanName(outboundName).toLowerCase();
+    const cleanOutbound = cleanName(outboundName, sourceIcons).toLowerCase();
     const targetSource = sources.find(s => {
-      const sName = cleanName(s.name || (s.id === 'custom' ? '独立节点组' : '')).toLowerCase();
+      const sName = cleanName(s.name || (s.id === 'custom' ? '独立节点组' : ''), sourceIcons).toLowerCase();
       return sName === cleanOutbound || (s.id === 'custom' && (cleanOutbound === '自建节点' || cleanOutbound === '独立节点组' || cleanOutbound === '手工自建'));
     });
     if (targetSource) {
@@ -355,7 +404,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
           const hasProxies = group.proxies && group.proxies.length > 0;
           const hasUse = group.use && group.use.length > 0;
           const isFilter = Boolean(group.filter);
-          const directNodes = resolveNodesForGroup(group, nodes, sources);
+          const directNodes = resolveNodesForGroup(group, nodes, sources, sourceIcons);
           const isExpanded = expandedGroupId === group.id;
 
           return (
@@ -420,12 +469,23 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                       {group.use!.map((u, idx) => {
                         const cleanLabel = cleanName(u);
                         const count = getNodeCountForOutbound(u);
+                        const matchedSrc = sources.find(
+                          s => cleanName(s.name).toLowerCase() === cleanLabel.toLowerCase() || s.id === u
+                        );
+                        const isFilterSrc = matchedSrc?.type === 'filter';
+                        const isCustomSrc = matchedSrc?.type === 'custom' || matchedSrc?.id === 'custom';
                         return (
                           <span
                             key={idx}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 bg-[#FAF0EC] border border-[#F3DDD3] text-[#B85D3F] rounded-md text-[11px] font-medium"
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-medium border ${
+                              isFilterSrc
+                                ? 'bg-[#F4F1FA] border-[#E8E1F5] text-[#6A4C9C]'
+                                : isCustomSrc
+                                ? 'bg-[#F0ECE4] border-[#E2DDD5] text-[#59554E]'
+                                : 'bg-[#FAF0EC] border-[#F3DDD3] text-[#B85D3F]'
+                            }`}
                           >
-                            <Zap className="w-3 h-3 text-[#CC785C]" />
+                            <span className="text-xs">{isFilterSrc ? '✨' : isCustomSrc ? '🖥️' : '⚡️'}</span>
                             <span>{cleanLabel}</span>
                             {count !== null && (
                               <span className="text-[9px] font-bold opacity-80">({count}节点)</span>

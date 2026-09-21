@@ -146,6 +146,12 @@ export interface SubscriptionProfile {
   updatedAt?: string;
 }
 
+export interface SourceIconsConfig {
+  custom?: string;
+  filter?: string;
+  remote?: string;
+}
+
 export interface AppConfig {
   sources: SubscriptionSource[];
   rules: ExtractionRule[];
@@ -159,6 +165,7 @@ export interface AppConfig {
     subToken?: string;
     adminPassword?: string;
     port?: number;
+    sourceIcons?: SourceIconsConfig;
   };
 }
 

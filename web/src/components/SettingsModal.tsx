@@ -1,17 +1,19 @@
 import React, { useState } from 'react';
-import { KeyRound, Lock, Save, X, RefreshCw, Check, ShieldAlert } from 'lucide-react';
-import { AppConfig } from '../types';
+import { KeyRound, Lock, Save, X, RefreshCw, Check, ShieldAlert, Palette } from 'lucide-react';
+import { AppConfig, SourceIconsConfig } from '../types';
 
 interface SettingsModalProps {
   config: AppConfig;
   onClose: () => void;
   onChangePassword?: (oldPass: string, newPass: string) => Promise<boolean>;
+  onUpdateSettings?: (settings: Partial<AppConfig['settings']>) => Promise<boolean>;
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({
   config,
   onClose,
   onChangePassword,
+  onUpdateSettings,
 }) => {
   // Password modification state
   const [oldPassword, setOldPassword] = useState('');
@@ -19,6 +21,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
   const [confirmPassword, setConfirmPassword] = useState('');
   const [pwdMsg, setPwdMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [isUpdatingPwd, setIsUpdatingPwd] = useState(false);
+
+  // Source Icons state
+  const currentIcons: SourceIconsConfig = config.settings?.sourceIcons || {};
+  const [customIcon, setCustomIcon] = useState(currentIcons.custom ?? '🖥️');
+  const [filterIcon, setFilterIcon] = useState(currentIcons.filter ?? '✨');
+  const [remoteIcon, setRemoteIcon] = useState(currentIcons.remote ?? '⚡️');
+  const [iconMsg, setIconMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isUpdatingIcons, setIsUpdatingIcons] = useState(false);
 
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -52,17 +62,132 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
     }
   };
 
+  const handleSaveIcons = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsUpdatingIcons(true);
+    setIconMsg(null);
+    try {
+      if (onUpdateSettings) {
+        const ok = await onUpdateSettings({
+          sourceIcons: {
+            custom: customIcon.trim() || '🖥️',
+            filter: filterIcon.trim() || '✨',
+            remote: remoteIcon.trim() || '⚡️',
+          },
+        });
+        if (ok) {
+          setIconMsg({ type: 'success', text: '图标配置已成功保存并同步到 config.json！' });
+        } else {
+          setIconMsg({ type: 'error', text: '保存失败，请检查网络或控制台错误' });
+        }
+      }
+    } catch (err: any) {
+      setIconMsg({ type: 'error', text: err.message || '保存图标配置失败' });
+    } finally {
+      setIsUpdatingIcons(false);
+    }
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-xs p-4 overflow-y-auto">
       <div className="claude-panel w-full max-w-lg p-6 rounded-3xl bg-white border border-[#E3DDD2] shadow-2xl space-y-6 my-8 animate-in fade-in zoom-in-95 duration-150">
         <div className="flex items-center justify-between pb-3 border-b border-[#F0ECE4]">
           <div className="flex items-center gap-2">
             <Lock className="w-5 h-5 text-[#CC785C]" />
-            <h3 className="text-base font-bold text-[#1F1E1D]">管理员密码设置</h3>
+            <h3 className="text-base font-bold text-[#1F1E1D]">全局偏好与设置</h3>
           </div>
           <button onClick={onClose} className="p-1 text-[#8C877D] hover:text-[#1F1E1D] rounded-lg">
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Source and Group Icons Configuration */}
+        <div className="space-y-3 pb-5 border-b border-[#F0ECE4]">
+          <div className="flex items-center gap-2">
+            <Palette className="w-4 h-4 text-[#CC785C]" />
+            <h4 className="text-xs font-bold text-[#1F1E1D]">订阅源与策略组图标配置</h4>
+          </div>
+
+          <p className="text-xs text-[#8C877D] leading-relaxed">
+            设置用于区分源类型的前缀图标（自建、过滤源、机场订阅）。配置会自动同步保存在根目录 <code className="px-1 py-0.5 rounded bg-[#F4EFE6] text-[#CC785C] font-mono text-[11px]">config.json</code> 中。
+          </p>
+
+          {iconMsg && (
+            <div
+              className={`p-2.5 rounded-xl text-xs flex items-center gap-2 ${
+                iconMsg.type === 'success'
+                  ? 'bg-[#EAF2EE] border border-[#D5E5DE] text-[#367A68]'
+                  : 'bg-[#FDF2F0] border border-[#F2D6D3] text-[#A8483B]'
+              }`}
+            >
+              {iconMsg.type === 'success' ? <Check className="w-3.5 h-3.5" /> : <ShieldAlert className="w-3.5 h-3.5" />}
+              <span>{iconMsg.text}</span>
+            </div>
+          )}
+
+          <form onSubmit={handleSaveIcons} className="space-y-3">
+            <div className="grid grid-cols-3 gap-2.5">
+              <div>
+                <label className="block text-[11px] font-medium text-[#4A4742] mb-1">
+                  自建/独立源
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    required
+                    placeholder="🖥️"
+                    value={customIcon}
+                    onChange={e => setCustomIcon(e.target.value)}
+                    className="w-full px-2.5 py-1.5 claude-input rounded-xl text-xs text-center font-mono"
+                  />
+                </div>
+                <span className="text-[10px] text-[#8C877D] mt-0.5 block">例如: 🖥️</span>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-[#4A4742] mb-1">
+                  过滤源
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    required
+                    placeholder="✨"
+                    value={filterIcon}
+                    onChange={e => setFilterIcon(e.target.value)}
+                    className="w-full px-2.5 py-1.5 claude-input rounded-xl text-xs text-center font-mono"
+                  />
+                </div>
+                <span className="text-[10px] text-[#8C877D] mt-0.5 block">例如: ✨</span>
+              </div>
+              <div>
+                <label className="block text-[11px] font-medium text-[#4A4742] mb-1">
+                  机场订阅
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    required
+                    placeholder="⚡️"
+                    value={remoteIcon}
+                    onChange={e => setRemoteIcon(e.target.value)}
+                    className="w-full px-2.5 py-1.5 claude-input rounded-xl text-xs text-center font-mono"
+                  />
+                </div>
+                <span className="text-[10px] text-[#8C877D] mt-0.5 block">例如: ⚡️</span>
+              </div>
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={isUpdatingIcons}
+                className="px-3 py-1.5 text-xs font-medium text-[#CC785C] bg-[#FAF0EC] hover:bg-[#F3DDD3] border border-[#F3DDD3] rounded-xl transition-colors disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Save className="w-3.5 h-3.5" />
+                {isUpdatingIcons ? '保存中...' : '保存图标配置'}
+              </button>
+            </div>
+          </form>
         </div>
 
         {/* Change Admin Password */}

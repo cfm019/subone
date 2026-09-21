@@ -25,19 +25,44 @@ export function formatCidr(ip: string): string {
   return trimmed.includes(':') ? `${trimmed}/128` : `${trimmed}/32`;
 }
 
-export function getSourceGroupPrefix(source: { type?: string; id?: string }): string {
-  if (source.type === 'custom' || source.id === 'custom') return '🖥️';
-  if (source.type === 'filter') return '✨';
-  return '⚡️';
+export interface SourceIconsConfig {
+  custom?: string;
+  filter?: string;
+  remote?: string;
 }
 
-export function cleanSourceOrGroupName(name: string): string {
+export function getSourceGroupPrefix(
+  source: { type?: string; id?: string },
+  icons?: SourceIconsConfig
+): string {
+  const customIcon = icons?.custom || '🖥️';
+  const filterIcon = icons?.filter || '✨';
+  const remoteIcon = icons?.remote || '⚡️';
+
+  if (source.type === 'custom' || source.id === 'custom') return customIcon;
+  if (source.type === 'filter') return filterIcon;
+  return remoteIcon;
+}
+
+export function cleanSourceOrGroupName(name: string, icons?: SourceIconsConfig): string {
   if (!name) return '';
-  return name.replace(/^[🖥️✨⚡️\s]+/, '').trim();
+  let cleaned = name;
+  if (icons) {
+    for (const icon of [icons.custom, icons.filter, icons.remote]) {
+      if (icon && cleaned.startsWith(icon)) {
+        cleaned = cleaned.slice(icon.length).trim();
+      }
+    }
+  }
+  return cleaned.replace(/^[\p{Extended_Pictographic}\uFE0F\u200D\s]+/u, '').trim();
 }
 
-export function formatSourceGroupTag(source: { name: string; type?: string; id?: string }): string {
-  const prefix = getSourceGroupPrefix(source);
-  const clean = cleanSourceOrGroupName(source.name);
+export function formatSourceGroupTag(
+  source: { name: string; type?: string; id?: string },
+  icons?: SourceIconsConfig
+): string {
+  const prefix = getSourceGroupPrefix(source, icons);
+  const clean = cleanSourceOrGroupName(source.name, icons);
   return `${prefix} ${clean}`;
 }
+

@@ -33,6 +33,11 @@ export interface ServerConfig {
   port: number;
   adminPassword?: string;
   subToken?: string;
+  sourceIcons?: {
+    custom?: string;
+    filter?: string;
+    remote?: string;
+  };
 }
 
 export function generateRandomSubToken(): string {
@@ -47,6 +52,11 @@ export function loadServerConfig(): ServerConfig {
   let port = process.env.PORT ? parseInt(process.env.PORT, 10) : 3456;
   let adminPassword = process.env.ADMIN_PASSWORD ? process.env.ADMIN_PASSWORD.trim() : undefined;
   let subToken = process.env.SUB_TOKEN ? process.env.SUB_TOKEN.trim() : undefined;
+  let sourceIcons = {
+    custom: '🖥️',
+    filter: '✨',
+    remote: '⚡️',
+  };
 
   if (fs.existsSync(ROOT_SERVER_CONFIG)) {
     try {
@@ -62,6 +72,13 @@ export function loadServerConfig(): ServerConfig {
       if (parsed.subToken && !process.env.SUB_TOKEN) {
         subToken = String(parsed.subToken).trim();
       }
+      if (parsed.sourceIcons && typeof parsed.sourceIcons === 'object') {
+        sourceIcons = {
+          custom: parsed.sourceIcons.custom || '🖥️',
+          filter: parsed.sourceIcons.filter || '✨',
+          remote: parsed.sourceIcons.remote || '⚡️',
+        };
+      }
     } catch (err) {
       console.error('Failed to parse root config.json:', err);
     }
@@ -69,6 +86,7 @@ export function loadServerConfig(): ServerConfig {
     const initialConfig = {
       port,
       adminPassword: adminPassword || 'YOUR_ADMIN_PASSWORD_HERE',
+      sourceIcons,
     };
     try {
       fs.writeFileSync(ROOT_SERVER_CONFIG, JSON.stringify(initialConfig, null, 2) + '\n', 'utf-8');
@@ -78,7 +96,7 @@ export function loadServerConfig(): ServerConfig {
     }
   }
 
-  return { port, adminPassword, subToken };
+  return { port, adminPassword, subToken, sourceIcons };
 }
 
 /**
@@ -225,6 +243,7 @@ export function loadConfig(): AppConfig {
           subToken: serverConfig.subToken,
           adminPassword: serverConfig.adminPassword,
           port: serverConfig.port,
+          sourceIcons: serverConfig.sourceIcons,
         },
       };
 
