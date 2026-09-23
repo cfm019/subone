@@ -8,6 +8,7 @@ import {
   SlidersHorizontal,
   GitBranch,
   FileCode,
+  BookOpen,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -76,6 +77,18 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Right actions */}
         <div className="flex items-center gap-1.5">
+          <a
+            href="https://cfm019.github.io/subone-doc/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer"
+            title="查看在线使用说明与配置手册"
+            aria-label="查看在线文档"
+          >
+            <BookOpen className="w-4 h-4 text-[#CC785C]" />
+            <span className="hidden sm:inline">文档</span>
+          </a>
+
           <button
             onClick={onOpenSettings}
             className="p-1.5 text-[#69655E] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded-lg transition-colors cursor-pointer"

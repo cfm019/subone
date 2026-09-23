@@ -1,5 +1,8 @@
 # SubOne
 
+> 📚 **在线文档**：[https://cfm019.github.io/subone-doc/](https://cfm019.github.io/subone-doc/)  
+> 包含系统安装部署指南、控制台图文使用手册、各客户端配置教程及按源解耦机制详解。
+
 多节点多源聚合与配置生成。支持汇聚多个上游机场订阅与自建独立节点，分 Profile 定制策略组、分流规则及模版，生成组合后的聚合订阅配置。
 
 目标格式支持 Sing-box、Mihomo、Loon、Quantumult X、Egern 与 Shadowrocket。
@@ -15,6 +18,8 @@
 ---
 
 ## 快速开始
+
+> 💡 图文安装指引、Docker 容器编排与客户端配置手册，请参阅 [SubOne 在线文档](https://cfm019.github.io/subone-doc/)。
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/cfm019/subone/main/install.sh)
