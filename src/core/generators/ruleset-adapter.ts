@@ -131,6 +131,14 @@ export function adaptRulesetForLoon(r: UnifiedRuleItem, idx?: number): { tag: st
     url = 'https://raw.githubusercontent.com/Loon0x00/LoonLiteRules/main/proxy/Google.list';
   } else if (cleanUrl.includes('telegram')) {
     url = 'https://raw.githubusercontent.com/Loon0x00/LoonLiteRules/main/proxy/Telegram.list';
+  } else if (cleanUrl.includes('github')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Loon/GitHub/GitHub.list';
+  } else if (cleanUrl.includes('steam@cn') || cleanUrl.includes('steamcn')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Loon/SteamCN/SteamCN.list';
+  } else if (cleanUrl.includes('steam')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Loon/Steam/Steam.list';
+  } else if (cleanUrl.includes('apple')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/Loon/Apple/Apple.list';
   } else if (cleanUrl.includes('geolocation-!cn') || cleanUrl.includes('gfw')) {
     url = 'https://github.com/ACL4SSR/ACL4SSR/raw/refs/heads/master/Clash/ProxyGFWlist.list';
   } else if (cleanUrl.includes('cn') || cleanUrl.includes('direct')) {
@@ -151,10 +159,44 @@ export function adaptRulesetForLoon(r: UnifiedRuleItem, idx?: number): { tag: st
 
 export function adaptRulesetForQuantumultX(r: UnifiedRuleItem, idx?: number): { tag: string; url: string } {
   const tag = formatRuleTag(r, idx);
-  const url = (r.clientUrls?.quantumultx || '').trim();
-  if (url) return { tag, url };
-  const loonInfo = adaptRulesetForLoon(r, idx);
-  return { tag, url: loonInfo.url };
+  const explicitUrl = (r.clientUrls?.quantumultx || '').trim();
+  if (explicitUrl) return { tag, url: explicitUrl };
+
+  const raw = (r.payload || '').toLowerCase();
+  const cleanUrl = raw.replace(/https?:\/\/gh-proxy\.com\//g, '');
+
+  let url = '';
+  if (cleanUrl.includes('category-ads') || cleanUrl.includes('ads') || cleanUrl.includes('advertising')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Advertising/Advertising.list';
+  } else if (cleanUrl.includes('category-ai') || cleanUrl.includes('openai') || cleanUrl.includes('claude') || cleanUrl.includes('gemini')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/OpenAI/OpenAI.list';
+  } else if (cleanUrl.includes('youtube')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/YouTube/YouTube.list';
+  } else if (cleanUrl.includes('google')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Google/Google.list';
+  } else if (cleanUrl.includes('telegram')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Telegram/Telegram.list';
+  } else if (cleanUrl.includes('github')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/GitHub/GitHub.list';
+  } else if (cleanUrl.includes('steam@cn') || cleanUrl.includes('steamcn')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/SteamCN/SteamCN.list';
+  } else if (cleanUrl.includes('steam')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Steam/Steam.list';
+  } else if (cleanUrl.includes('apple')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Apple/Apple.list';
+  } else if (cleanUrl.includes('geolocation-!cn') || cleanUrl.includes('gfw') || cleanUrl.includes('global') || cleanUrl.includes('proxy')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Global/Global.list';
+  } else if (cleanUrl.includes('cn') || cleanUrl.includes('direct') || cleanUrl.includes('china')) {
+    url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/China/China.list';
+  } else {
+    if (r.payload.endsWith('.list') || r.payload.endsWith('.conf')) {
+      url = r.payload;
+    } else {
+      url = 'https://raw.githubusercontent.com/blackmatrix7/ios_rule_script/master/rule/QuantumultX/Global/Global.list';
+    }
+  }
+
+  return { tag, url };
 }
 
 export function adaptRulesetForEgern(r: UnifiedRuleItem, idx?: number): { tag: string; url: string } {

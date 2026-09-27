@@ -679,11 +679,16 @@ export function injectUnifiedToLoon(
   localRuleLines.push(`FINAL,${finalOutbound}`);
 
   // 5. Build [Remote Rule]
-  const remoteRuleLines = remoteRules.map((r, idx) => {
+  const seenLoonRemoteUrls = new Set<string>();
+  const remoteRuleLines: string[] = [];
+  remoteRules.forEach((r, idx) => {
     const adapted = adaptRulesetForLoon(r, idx);
+    const cleanUrl = (adapted.url || '').trim();
+    if (!cleanUrl || seenLoonRemoteUrls.has(cleanUrl)) return;
+    seenLoonRemoteUrls.add(cleanUrl);
     const tag = r.name.replace(/[=,]/g, '_');
     const safeOutbound = resolveSafeOutbound(r.outbound, availableGroupNames, fallbackGroup);
-    return `${adapted.url}, policy=${safeOutbound}, tag=${tag}, enabled=true`;
+    remoteRuleLines.push(`${cleanUrl}, policy=${safeOutbound}, tag=${tag}, enabled=true`);
   });
 
   const result: string[] = [];
