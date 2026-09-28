@@ -1,6 +1,6 @@
 import { ProxyNode, ProxyGroupItem, UnifiedRuleItem, SubscriptionSource } from '../../types/index.js';
 import { adaptRulesetForQuantumultX, formatRuleTag } from './ruleset-adapter.js';
-import { resolveSafeOutbound, formatCidr, cleanSourceOrGroupName, formatSourceGroupTag } from './common.js';
+import { resolveSafeOutbound, formatCidr, cleanSourceOrGroupName, formatSourceGroupTag, resolveGroupIcon, DEFAULT_QX_ICON_BASE } from './common.js';
 
 export function nodeToQuantumultXProxy(node: ProxyNode): string {
   const tag = node.name.replace(/[=,]/g, '_');
@@ -313,7 +313,8 @@ export function injectUnifiedToQuantumultX(
   if (!expandNodes) {
     networkSources.forEach(s => {
       const tag = s.name.replace(/[=,]/g, '_').trim();
-      serverRemoteLines.push(`${s.url}, tag=${tag}, update-interval=86400, opt-parser=false`);
+      const iconUrl = resolveGroupIcon(s.name) || `${DEFAULT_QX_ICON_BASE}/Airport.png`;
+      serverRemoteLines.push(`${s.url}, tag=${tag}, update-interval=86400, opt-parser=false, img-url=${iconUrl}`);
       allActiveRemoteSources.push(s);
     });
 
@@ -322,7 +323,8 @@ export function injectUnifiedToQuantumultX(
       const token = encodeURIComponent(options.subToken);
       internalPhysicalSources.forEach(s => {
         const tag = s.name.replace(/[=,]/g, '_').trim();
-        serverRemoteLines.push(`${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=quantumultx, tag=${tag}, update-interval=86400, opt-parser=false`);
+        const iconUrl = resolveGroupIcon(s.name) || `${DEFAULT_QX_ICON_BASE}/Server.png`;
+        serverRemoteLines.push(`${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=quantumultx, tag=${tag}, update-interval=86400, opt-parser=false, img-url=${iconUrl}`);
         allActiveRemoteSources.push(s);
       });
     }
@@ -365,13 +367,26 @@ export function injectUnifiedToQuantumultX(
   });
 
   const groupLines: string[] = [];
+  const addGroupLine = (line: string, grp: ProxyGroupItem) => {
+    if (line.includes('img-url=')) {
+      groupLines.push(line);
+      return;
+    }
+    const iconUrl = resolveGroupIcon(grp.name, grp.icon);
+    if (iconUrl) {
+      groupLines.push(`${line}, img-url=${iconUrl}`);
+    } else {
+      groupLines.push(line);
+    }
+  };
+
   effectiveGroups.forEach(grp => {
     if (grp.type === 'direct') {
-      groupLines.push(`static=${grp.name}, direct`);
+      addGroupLine(`static=${grp.name}, direct`, grp);
       return;
     }
     if (grp.type === 'reject') {
-      groupLines.push(`static=${grp.name}, reject`);
+      addGroupLine(`static=${grp.name}, reject`, grp);
       return;
     }
 
@@ -391,20 +406,20 @@ export function injectUnifiedToQuantumultX(
         const members = matched.length > 0 ? matched : ['direct'];
         const groupType = grp.type === 'fallback' ? 'available' : (grp.type === 'load-balance' ? 'round-robin' : (grp.type === 'select' ? 'static' : 'url-latency-benchmark'));
         if (groupType === 'url-latency-benchmark') {
-          groupLines.push(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+          addGroupLine(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`, grp);
         } else {
-          groupLines.push(`${groupType}=${grp.name}, ${members.join(', ')}`);
+          addGroupLine(`${groupType}=${grp.name}, ${members.join(', ')}`, grp);
         }
       } else {
         // 根据策略组类型生成对应 QX 策略组（若为 select 则为 static，支持手动勾选；若为 urltest 则为自动测速）
         if (grp.type === 'select') {
-          groupLines.push(`static=${grp.name}, server-tag-regex=${filterPattern}`);
+          addGroupLine(`static=${grp.name}, server-tag-regex=${filterPattern}`, grp);
         } else if (grp.type === 'fallback') {
-          groupLines.push(`available=${grp.name}, server-tag-regex=${filterPattern}`);
+          addGroupLine(`available=${grp.name}, server-tag-regex=${filterPattern}`, grp);
         } else if (grp.type === 'load-balance') {
-          groupLines.push(`round-robin=${grp.name}, server-tag-regex=${filterPattern}`);
+          addGroupLine(`round-robin=${grp.name}, server-tag-regex=${filterPattern}`, grp);
         } else {
-          groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=${filterPattern}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+          addGroupLine(`url-latency-benchmark=${grp.name}, server-tag-regex=${filterPattern}, check-interval=300, tolerance=${grp.tolerance || 50}`, grp);
         }
       }
       return;
@@ -413,9 +428,9 @@ export function injectUnifiedToQuantumultX(
     if (grp.name === '♻️ 自动选择') {
       if (expandNodes) {
         const members = allNodeNames.length > 0 ? allNodeNames : ['direct'];
-        groupLines.push(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        addGroupLine(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`, grp);
       } else {
-        groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=.*, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        addGroupLine(`url-latency-benchmark=${grp.name}, server-tag-regex=.*, check-interval=300, tolerance=${grp.tolerance || 50}`, grp);
       }
       return;
     }
@@ -423,9 +438,9 @@ export function injectUnifiedToQuantumultX(
     if (grp.name === '👉 手动选择') {
       if (expandNodes) {
         const members = allNodeNames.length > 0 ? allNodeNames : ['direct'];
-        groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
+        addGroupLine(`static=${grp.name}, ${members.join(', ')}`, grp);
       } else {
-        groupLines.push(`static=${grp.name}, server-tag-regex=.*`);
+        addGroupLine(`static=${grp.name}, server-tag-regex=.*`, grp);
       }
       return;
     }
@@ -450,18 +465,18 @@ export function injectUnifiedToQuantumultX(
 
       if (filterNodeNames.length > 0) {
         if (grp.type === 'select') {
-          groupLines.push(`static=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`);
+          addGroupLine(`static=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`, grp);
         } else if (grp.type === 'urltest') {
-          groupLines.push(`url-latency-benchmark=${grp.name}, ${filterNodeNames.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+          addGroupLine(`url-latency-benchmark=${grp.name}, ${filterNodeNames.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`, grp);
         } else if (grp.type === 'fallback') {
-          groupLines.push(`available=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`);
+          addGroupLine(`available=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`, grp);
         } else if (grp.type === 'load-balance') {
-          groupLines.push(`round-robin=${grp.name}, ${filterNodeNames.join(', ')}`);
+          addGroupLine(`round-robin=${grp.name}, ${filterNodeNames.join(', ')}`, grp);
         } else {
-          groupLines.push(`static=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`);
+          addGroupLine(`static=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`, grp);
         }
       } else {
-        groupLines.push(`static=${grp.name}, direct`);
+        addGroupLine(`static=${grp.name}, direct`, grp);
       }
       return;
     }
@@ -477,11 +492,11 @@ export function injectUnifiedToQuantumultX(
       const sTag = matchedRemote.name.replace(/[=,]/g, '_').trim();
       const groupType = grp.type === 'fallback' ? 'available' : (grp.type === 'load-balance' ? 'round-robin' : (grp.type === 'urltest' ? 'url-latency-benchmark' : 'static'));
       if (groupType === 'url-latency-benchmark') {
-        groupLines.push(`url-latency-benchmark=${grp.name}, resource-tag-regex=^${sTag}$, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        addGroupLine(`url-latency-benchmark=${grp.name}, resource-tag-regex=^${sTag}$, check-interval=300, tolerance=${grp.tolerance || 50}`, grp);
       } else if (groupType === 'static') {
-        groupLines.push(`static=${grp.name}, resource-tag-regex=^${sTag}$`);
+        addGroupLine(`static=${grp.name}, resource-tag-regex=^${sTag}$`, grp);
       } else {
-        groupLines.push(`${groupType}=${grp.name}, resource-tag-regex=^${sTag}$`);
+        addGroupLine(`${groupType}=${grp.name}, resource-tag-regex=^${sTag}$`, grp);
       }
       return;
     }
@@ -496,7 +511,7 @@ export function injectUnifiedToQuantumultX(
 
       if (isCustomGrp) {
         const members = customNodeNames.length > 0 ? customNodeNames : ['direct'];
-        groupLines.push(`static=${grp.name}, ${members.join(', ')}`);
+        addGroupLine(`static=${grp.name}, ${members.join(', ')}`, grp);
         return;
       }
     }
@@ -550,7 +565,7 @@ export function injectUnifiedToQuantumultX(
     if (proxies.length === 0) proxies = ['direct'];
 
     const groupType = grp.type === 'fallback' ? 'available' : (grp.type === 'load-balance' ? 'round-robin' : (grp.type === 'urltest' ? 'url-latency-benchmark' : 'static'));
-    groupLines.push(`${groupType}=${grp.name}, ${proxies.join(', ')}`);
+    addGroupLine(`${groupType}=${grp.name}, ${proxies.join(', ')}`, grp);
   });
 
   // 3. Build [filter_remote]

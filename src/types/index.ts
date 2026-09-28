@@ -171,6 +171,7 @@ export interface ProxyGroupItem {
   url?: string;
   interval?: number;
   isCountryGroup?: boolean;
+  icon?: string;
 }
 
 
