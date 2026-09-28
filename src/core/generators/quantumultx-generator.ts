@@ -260,7 +260,8 @@ export function injectUnifiedToQuantumultX(
   }));
 
   const networkSources = sources.filter(s => s.enabled && s.type !== 'custom' && s.type !== 'filter' && s.url && s.url.startsWith('http'));
-  const internalSources = sources.filter(s => s.enabled && !networkSources.some(ns => ns.id === s.id));
+  // 内部真实物理自建源（排除 filter 筛选源，避免同一批节点被作为两个订阅重复拉取导致节点重复冲突和警告标）
+  const internalPhysicalSources = sources.filter(s => s.enabled && s.type !== 'filter' && !networkSources.some(ns => ns.id === s.id));
   const hasSuboneRemoteSubscription = Boolean(options?.baseUrl && options?.subToken && !expandNodes);
 
   const customNodes = nodes.filter(n => n.sourceId === 'custom' || n.sourceId?.startsWith('custom') || !n.sourceId);
@@ -319,7 +320,7 @@ export function injectUnifiedToQuantumultX(
     if (hasSuboneRemoteSubscription && options?.baseUrl && options?.subToken) {
       const cleanBaseUrl = options.baseUrl.replace(/\/+$/, '');
       const token = encodeURIComponent(options.subToken);
-      internalSources.forEach(s => {
+      internalPhysicalSources.forEach(s => {
         const tag = s.name.replace(/[=,]/g, '_').trim();
         serverRemoteLines.push(`${cleanBaseUrl}/s/${token}/source/${encodeURIComponent(s.id)}?target=quantumultx, tag=${tag}, update-interval=86400, opt-parser=false`);
         allActiveRemoteSources.push(s);
@@ -327,25 +328,26 @@ export function injectUnifiedToQuantumultX(
     }
   }
 
-  const allRemoteTags = new Set(allActiveRemoteSources.map(s => s.name.replace(/[=,]/g, '_').trim()));
-
-  const activeSources = expandNodes ? sources.filter(s => s.enabled) : allActiveRemoteSources;
+  // 确保所有启用的源（包括 filter 源与物理源）都有对应的策略组；去重时彻底剥离各种 emoji（✨/🖥️/⚡️ 等），避免重复生成第二套组
+  const activeSources = sources.filter(s => s.enabled);
   activeSources.forEach(s => {
-    const sTag = s.name.replace(/[=,]/g, '_').trim();
-    const groupTag = sTag.startsWith('⚡️') ? sTag : `⚡️ ${sTag}`;
-    const cleanTag = sTag.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
+    const sClean = cleanSourceOrGroupName(s.name).toLowerCase();
+    const targetTag = formatSourceGroupTag(s);
 
     const exists = effectiveGroups.some(g => {
-      const gClean = g.name.replace(/^[⚡️\s]+/, '').trim().toLowerCase();
-      return g.name === groupTag || g.name === sTag || gClean === cleanTag;
+      if (g.id === `grp-src-${s.id}`) return true;
+      if (s.id === 'custom' && g.id === 'grp-src-custom') return true;
+      if (g.name === targetTag || g.name === s.name) return true;
+      const gClean = cleanSourceOrGroupName(g.name).toLowerCase();
+      return gClean === sClean;
     });
 
     if (!exists) {
       effectiveGroups.push({
-        id: `grp-src-${s.id}`,
-        name: groupTag,
-        type: s.type === 'custom' ? 'select' : 'urltest',
-        use: [s.name],
+        id: s.id === 'custom' ? 'grp-src-custom' : `grp-src-${s.id}`,
+        name: targetTag,
+        type: s.type === 'custom' ? 'select' : (s.type === 'filter' ? 'select' : 'urltest'),
+        use: [cleanSourceOrGroupName(s.name)],
         tolerance: 50,
         interval: 300,
         url: 'https://www.google.com/generate_204',
@@ -387,9 +389,23 @@ export function injectUnifiedToQuantumultX(
           matched = [];
         }
         const members = matched.length > 0 ? matched : ['direct'];
-        groupLines.push(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        const groupType = grp.type === 'fallback' ? 'available' : (grp.type === 'load-balance' ? 'round-robin' : (grp.type === 'select' ? 'static' : 'url-latency-benchmark'));
+        if (groupType === 'url-latency-benchmark') {
+          groupLines.push(`url-latency-benchmark=${grp.name}, ${members.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        } else {
+          groupLines.push(`${groupType}=${grp.name}, ${members.join(', ')}`);
+        }
       } else {
-        groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=${filterPattern}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        // 根据策略组类型生成对应 QX 策略组（若为 select 则为 static，支持手动勾选；若为 urltest 则为自动测速）
+        if (grp.type === 'select') {
+          groupLines.push(`static=${grp.name}, server-tag-regex=${filterPattern}`);
+        } else if (grp.type === 'fallback') {
+          groupLines.push(`available=${grp.name}, server-tag-regex=${filterPattern}`);
+        } else if (grp.type === 'load-balance') {
+          groupLines.push(`round-robin=${grp.name}, server-tag-regex=${filterPattern}`);
+        } else {
+          groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=${filterPattern}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        }
       }
       return;
     }
@@ -414,20 +430,58 @@ export function injectUnifiedToQuantumultX(
       return;
     }
 
-    // Match dedicated remote source group
     const cleanName = cleanSourceOrGroupName(grp.name).toLowerCase();
+
+    // 优先匹配 Filter 筛选源（例如 ✨ HK优选、✨ AI选择）：
+    // Filter 源的节点已由 Subone 计算完成，直接注入到策略组中
+    const matchedFilterSource = sources.find(s =>
+      s.enabled && s.type === 'filter' && (
+        grp.id === `grp-src-${s.id}` ||
+        cleanSourceOrGroupName(s.name).toLowerCase() === cleanName ||
+        s.id.toLowerCase() === cleanName ||
+        (grp.use && grp.use.some(u => cleanSourceOrGroupName(u).toLowerCase() === cleanSourceOrGroupName(s.name).toLowerCase()))
+      )
+    );
+
+    if (matchedFilterSource) {
+      const filterNodeNames = (matchedFilterSource.nodes || [])
+        .filter(isSupportedByQuantumultX)
+        .map(n => n.name.replace(/[=,]/g, '_'));
+
+      if (filterNodeNames.length > 0) {
+        if (grp.type === 'select') {
+          groupLines.push(`static=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`);
+        } else if (grp.type === 'urltest') {
+          groupLines.push(`url-latency-benchmark=${grp.name}, ${filterNodeNames.join(', ')}, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        } else if (grp.type === 'fallback') {
+          groupLines.push(`available=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`);
+        } else if (grp.type === 'load-balance') {
+          groupLines.push(`round-robin=${grp.name}, ${filterNodeNames.join(', ')}`);
+        } else {
+          groupLines.push(`static=${grp.name}, ${[...filterNodeNames, 'direct'].join(', ')}`);
+        }
+      } else {
+        groupLines.push(`static=${grp.name}, direct`);
+      }
+      return;
+    }
+
+    // 匹配物理远程订阅源（外部机场订阅 / 内部独立节点组）
     const matchedRemote = allActiveRemoteSources.find(s => {
       const sClean = cleanSourceOrGroupName(s.name).toLowerCase();
-      return sClean === cleanName || s.id.toLowerCase() === cleanName;
+      return sClean === cleanName || s.id.toLowerCase() === cleanName ||
+        (grp.use && grp.use.some(u => cleanSourceOrGroupName(u).toLowerCase() === sClean));
     });
 
     if (matchedRemote && !expandNodes) {
       const sTag = matchedRemote.name.replace(/[=,]/g, '_').trim();
-      const groupType = grp.type === 'urltest' ? 'url-latency-benchmark' : 'static';
+      const groupType = grp.type === 'fallback' ? 'available' : (grp.type === 'load-balance' ? 'round-robin' : (grp.type === 'urltest' ? 'url-latency-benchmark' : 'static'));
       if (groupType === 'url-latency-benchmark') {
-        groupLines.push(`url-latency-benchmark=${grp.name}, server-tag-regex=.*, check-interval=300, tolerance=${grp.tolerance || 50}`);
+        groupLines.push(`url-latency-benchmark=${grp.name}, resource-tag-regex=^${sTag}$, check-interval=300, tolerance=${grp.tolerance || 50}`);
+      } else if (groupType === 'static') {
+        groupLines.push(`static=${grp.name}, resource-tag-regex=^${sTag}$`);
       } else {
-        groupLines.push(`static=${grp.name}, resource-tag-regex=${sTag}, direct`);
+        groupLines.push(`${groupType}=${grp.name}, resource-tag-regex=^${sTag}$`);
       }
       return;
     }
@@ -457,48 +511,25 @@ export function injectUnifiedToQuantumultX(
     if (grp.use && grp.use.length > 0) {
       grp.use.forEach(u => {
         const cleanU = cleanSourceOrGroupName(u).toLowerCase();
-        const isCustomU = cleanU === '自建节点' || cleanU === '独立节点组' || cleanU === 'custom' || cleanU === '手工自建' || customSources.some(cs => cleanSourceOrGroupName(cs.name).toLowerCase() === cleanU);
         const matchedSource = sources.find(s => {
           const sClean = cleanSourceOrGroupName(s.name).toLowerCase();
           return sClean === cleanU || s.id.trim().toLowerCase() === cleanU;
         });
 
-        if (!expandNodes && matchedSource) {
+        if (matchedSource) {
           const targetGrp = effectiveGroups.find(g => {
             const gClean = cleanSourceOrGroupName(g.name).toLowerCase();
-            return gClean === cleanU || g.id === `grp-src-${matchedSource.id}`;
+            return g.id === `grp-src-${matchedSource.id}` ||
+                   (matchedSource.id === 'custom' && g.id === 'grp-src-custom') ||
+                   gClean === cleanU;
           });
-          if (targetGrp && !proxies.includes(targetGrp.name)) {
+          if (targetGrp && targetGrp.name !== grp.name && !proxies.includes(targetGrp.name)) {
             proxies.push(targetGrp.name);
-          }
-        } else if (isCustomU) {
-          if (!hasSuboneRemoteSubscription) {
-            if (validGroupNames.has(customTagName) && !proxies.includes(customTagName)) {
-              proxies.unshift(customTagName);
-            }
-            customNodeNames.forEach(m => {
-              if (!proxies.includes(m)) proxies.push(m);
+          } else if (!targetGrp && matchedSource.nodes && matchedSource.nodes.length > 0) {
+            matchedSource.nodes.forEach(m => {
+              const nodeTag = m.name.replace(/[=,]/g, '_');
+              if (!proxies.includes(nodeTag)) proxies.push(nodeTag);
             });
-          }
-        } else if (matchedSource) {
-          let srcNodeList: string[] = [];
-          if (Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
-            srcNodeList = matchedSource.nodes.map(n => n.name.replace(/[=,]/g, '_'));
-          } else {
-            srcNodeList = nodes.filter(n => {
-              const sName = (n.sourceName || '').trim().toLowerCase().replace(/^[⚡️\s]+/, '');
-              const sId = (n.sourceId || '').trim().toLowerCase();
-              return sName === cleanU || sId === cleanU;
-            }).map(n => n.name.replace(/[=,]/g, '_'));
-          }
-          srcNodeList.forEach(m => {
-            if (!proxies.includes(m)) proxies.push(m);
-          });
-          const grpTag = u.startsWith('⚡️') ? u : `⚡️ ${u}`;
-          if (validGroupNames.has(grpTag) && !proxies.includes(grpTag)) {
-            proxies.push(grpTag);
-          } else if (validGroupNames.has(u) && !proxies.includes(u)) {
-            proxies.push(u);
           }
         }
       });
