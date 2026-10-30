@@ -4,10 +4,8 @@ import {
   ChevronDown,
   Copy,
   Download,
-  Eye,
   FileCode,
   Plus,
-  RefreshCw,
   RotateCcw,
   Save,
   Trash2,
@@ -21,7 +19,7 @@ interface TemplateEditorProps {
   onUpdateTemplate: (id: string, updates: Partial<ConfigTemplate>) => Promise<void>;
   onDeleteTemplate: (id: string) => Promise<void>;
   onResetTemplate: (id: string) => Promise<ConfigTemplate>;
-  onPreview: (templateId?: string, customTemplate?: string, customType?: string) => Promise<{ nodeCount: number; data: string }>;
+  onPreview?: (templateId?: string, customTemplate?: string, customType?: string) => Promise<{ nodeCount: number; data: string }>;
 }
 
 export const TemplateEditor: React.FC<TemplateEditorProps> = ({
@@ -30,13 +28,9 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   onUpdateTemplate,
   onDeleteTemplate,
   onResetTemplate,
-  onPreview,
 }) => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(templates[0]?.id || '');
   const [templateContent, setTemplateContent] = useState('');
-  const [previewContent, setPreviewContent] = useState('');
-  const [previewNodeCount, setPreviewNodeCount] = useState(0);
-  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -51,26 +45,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
   useEffect(() => {
     if (currentTemplate) {
       setTemplateContent(currentTemplate.content || '');
-      handleRefreshPreview(currentTemplate.id, currentTemplate.content, currentTemplate.type);
     }
   }, [selectedTemplateId, currentTemplate]);
-
-  const handleRefreshPreview = async (
-    tplId = currentTemplate?.id,
-    customTpl = templateContent,
-    customType = currentTemplate?.type
-  ) => {
-    setIsPreviewLoading(true);
-    try {
-      const res = await onPreview(tplId, customTpl, customType);
-      setPreviewContent(res.data);
-      setPreviewNodeCount(res.nodeCount);
-    } catch (e) {
-      setPreviewContent('# 预览生成失败，请检查模版语法');
-    } finally {
-      setIsPreviewLoading(false);
-    }
-  };
 
   const handleResetTemplate = async () => {
     if (!currentTemplate) return;
@@ -80,7 +56,6 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
       const resetTpl = await onResetTemplate(currentTemplate.id);
       if (resetTpl?.content) {
         setTemplateContent(resetTpl.content);
-        await handleRefreshPreview(resetTpl.id, resetTpl.content, resetTpl.type);
       }
     } catch (err: any) {
       console.error('handleResetTemplate error:', err);
@@ -95,7 +70,6 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     setIsSaving(true);
     try {
       await onUpdateTemplate(currentTemplate.id, { content: templateContent });
-      await handleRefreshPreview();
     } finally {
       setIsSaving(false);
     }
@@ -117,13 +91,13 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
     }
   };
 
-  const handleCopyPreview = () => {
-    navigator.clipboard.writeText(previewContent);
+  const handleCopyTemplate = () => {
+    navigator.clipboard.writeText(templateContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleDownloadPreview = () => {
+  const handleDownloadTemplate = () => {
     if (!currentTemplate) return;
     const ext = currentTemplate.type === 'singbox'
       ? 'json'
@@ -218,19 +192,10 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
             onClick={handleResetTemplate}
             disabled={isSaving}
             className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold btn-claude-secondary rounded-xl text-[#78746D] hover:text-[#1F1E1D]"
-            title="恢复为系统最新内置的默认模版"
+            title="恢复为系统内置的默认模版"
           >
             <RotateCcw className="w-3.5 h-3.5 text-[#CC785C]" />
             <span>恢复默认</span>
-          </button>
-
-          <button
-            onClick={() => handleRefreshPreview()}
-            disabled={isPreviewLoading}
-            className="flex items-center gap-1.5 px-3 py-2 text-xs font-semibold btn-claude-secondary rounded-xl"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 text-[#CC785C] ${isPreviewLoading ? 'animate-spin' : ''}`} />
-            <span>实时生成</span>
           </button>
 
           <button
@@ -244,16 +209,31 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
         </div>
       </div>
 
-      {/* Editor & Preview Side-by-Side Split Panes with Smooth Scroll */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-2 gap-4 min-h-0 h-full">
-        {/* Left: Template Source Editor */}
+      {/* Editor Full Width Pane */}
+      <div className="flex-1 flex flex-col min-h-0 h-full">
         <div className="claude-panel rounded-2xl flex flex-col h-full min-h-0 overflow-hidden shadow-xs">
           <div className="px-4 py-2.5 bg-[#FAF8F5] border-b border-[#E8E4DC] flex items-center justify-between shrink-0">
             <div className="flex items-center gap-2">
               <FileCode className="w-4 h-4 text-[#CC785C]" />
-              <span className="text-xs font-bold text-[#1F1E1D]">模版配置骨架 </span>
+              <span className="text-xs font-bold text-[#1F1E1D]">模版配置骨架</span>
             </div>
-            <span className="text-[11px] text-[#8C877D]">保存后将注入节点与规则</span>
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={handleCopyTemplate}
+                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium btn-claude-secondary rounded-lg"
+                title="复制模版内容"
+              >
+                {copied ? <Check className="w-3 h-3 text-[#367A68]" /> : <Copy className="w-3 h-3 text-[#78746D]" />}
+                <span>{copied ? '已复制' : '复制'}</span>
+              </button>
+              <button
+                onClick={handleDownloadTemplate}
+                className="p-1 text-[#69655E] hover:text-[#1F1E1D] btn-claude-secondary rounded-lg"
+                title="下载模版文件"
+              >
+                <Download className="w-3.5 h-3.5" />
+              </button>
+            </div>
           </div>
           <div className="flex-1 relative min-h-0 w-full h-full bg-white">
             <textarea
@@ -261,42 +241,8 @@ export const TemplateEditor: React.FC<TemplateEditorProps> = ({
               onChange={e => setTemplateContent(e.target.value)}
               spellCheck={false}
               className="absolute inset-0 w-full h-full p-4 bg-white font-mono text-xs text-[#2D2B28] focus:outline-none resize-none leading-relaxed overflow-y-auto overflow-x-auto"
-              placeholder="此处粘贴或编辑配置模版..."
+              placeholder="此处编辑配置模版..."
             />
-          </div>
-        </div>
-
-        {/* Right: Merged Output Preview */}
-        <div className="claude-panel rounded-2xl flex flex-col h-full min-h-0 overflow-hidden shadow-xs">
-          <div className="px-4 py-2.5 bg-[#FAF8F5] border-b border-[#E8E4DC] flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-2">
-              <Eye className="w-4 h-4 text-[#367A68]" />
-              <span className="text-xs font-bold text-[#1F1E1D]">
-                合成预览 ({previewNodeCount} 节点已注入)
-              </span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <button
-                onClick={handleCopyPreview}
-                className="flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium btn-claude-secondary rounded-lg"
-                title="复制合成后的完整配置"
-              >
-                {copied ? <Check className="w-3 h-3 text-[#367A68]" /> : <Copy className="w-3 h-3" />}
-                <span>{copied ? '已复制' : '复制结果'}</span>
-              </button>
-              <button
-                onClick={handleDownloadPreview}
-                className="p-1 text-[#69655E] hover:text-[#1F1E1D] btn-claude-secondary rounded-lg"
-                title="下载为本地配置文件"
-              >
-                <Download className="w-3.5 h-3.5" />
-              </button>
-            </div>
-          </div>
-          <div className="flex-1 relative min-h-0 w-full h-full bg-[#FAF9F6]">
-            <pre className="absolute inset-0 w-full h-full p-4 bg-[#FAF9F6] font-mono text-xs text-[#1F1E1D] overflow-y-auto overflow-x-auto leading-relaxed select-all">
-              {previewContent || '# 正在生成合成配置...'}
-            </pre>
           </div>
         </div>
       </div>
