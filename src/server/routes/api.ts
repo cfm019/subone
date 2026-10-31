@@ -437,18 +437,36 @@ apiRouter.delete('/api/sources/:id', (req, res) => {
 
   if (deletedSource) {
     const sClean = cleanSourceOrGroupName(deletedSource.name).toLowerCase();
+    const sId = (deletedSource.id || '').trim().toLowerCase();
+    const sRaw = (deletedSource.name || '').trim().toLowerCase();
+
+    const matchesSource = (target: string) => {
+      if (!target) return false;
+      const t = target.trim().toLowerCase();
+      const tClean = cleanSourceOrGroupName(target).toLowerCase();
+      return t === sId || t === sRaw || tClean === sClean || tClean === sId;
+    };
+
     appConfig.proxyGroups = (appConfig.proxyGroups || []).filter(g => 
-      g.id !== `grp-src-${deletedSource.id}` && cleanSourceOrGroupName(g.name).toLowerCase() !== sClean
+      g.id !== `grp-src-${deletedSource.id}` && !matchesSource(g.name)
     );
     appConfig.proxyGroups.forEach(grp => {
-      if (grp.use) grp.use = grp.use.filter(u => cleanSourceOrGroupName(u).toLowerCase() !== sClean);
-      if (grp.proxies) grp.proxies = grp.proxies.filter(p => cleanSourceOrGroupName(p).toLowerCase() !== sClean);
+      if (grp.use) grp.use = grp.use.filter(u => !matchesSource(u));
+      if (grp.sources) grp.sources = grp.sources.filter(s => !matchesSource(s));
+      if (grp.proxies) grp.proxies = grp.proxies.filter(p => !matchesSource(p));
     });
 
     // Clean up parentSourceIds references in filter sources
     appConfig.sources.forEach(s => {
       if (s.type === 'filter' && s.filterConfig?.parentSourceIds) {
         s.filterConfig.parentSourceIds = s.filterConfig.parentSourceIds.filter(id => id !== req.params.id);
+      }
+    });
+
+    // Clean up sourceIds references in profiles
+    (appConfig.profiles || []).forEach(p => {
+      if (p.nodeFilter?.sourceIds) {
+        p.nodeFilter.sourceIds = p.nodeFilter.sourceIds.filter(id => id !== req.params.id && !matchesSource(id));
       }
     });
   }
@@ -578,9 +596,52 @@ apiRouter.get('/api/nodes', async (req, res) => {
   }
 });
 
+export function sanitizeProxyGroups(appConfig: AppConfig): boolean {
+  let changed = false;
+  const validSourceSet = new Set<string>();
+  (appConfig.sources || []).forEach(s => {
+    if (s.id) validSourceSet.add(s.id.trim().toLowerCase());
+    if (s.name) {
+      validSourceSet.add(s.name.trim().toLowerCase());
+      validSourceSet.add(cleanSourceOrGroupName(s.name).toLowerCase());
+    }
+  });
+
+  (appConfig.proxyGroups || []).forEach(g => {
+    if (Array.isArray(g.sources) && g.sources.length > 0) {
+      const filtered = g.sources.filter(s => {
+        const raw = (s || '').trim().toLowerCase();
+        const clean = cleanSourceOrGroupName(s).toLowerCase();
+        return validSourceSet.has(raw) || validSourceSet.has(clean);
+      });
+      if (filtered.length !== g.sources.length) {
+        g.sources = filtered;
+        changed = true;
+      }
+    }
+    if (Array.isArray(g.use) && g.use.length > 0) {
+      const filtered = g.use.filter(u => {
+        const raw = (u || '').trim().toLowerCase();
+        const clean = cleanSourceOrGroupName(u).toLowerCase();
+        return validSourceSet.has(raw) || validSourceSet.has(clean);
+      });
+      if (filtered.length !== g.use.length) {
+        g.use = filtered;
+        changed = true;
+      }
+    }
+  });
+
+  return changed;
+}
+
 // 5. Proxy Groups Management (出口策略分组)
 apiRouter.get('/api/groups', (req, res) => {
-  if (ensureCustomProxyGroup(appConfig)) {
+  let needSave = ensureCustomProxyGroup(appConfig);
+  if (sanitizeProxyGroups(appConfig)) {
+    needSave = true;
+  }
+  if (needSave) {
     saveConfig(appConfig);
   }
   res.json({ success: true, data: appConfig.proxyGroups });

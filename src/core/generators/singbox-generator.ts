@@ -622,6 +622,49 @@ export function injectUnifiedToSingbox(
     });
   }
 
+  // Break circular dependencies between group outbounds (prevents Sing-box fatal crashes)
+  const groupOutboundMap = new Map<string, any>();
+  groupOutbounds.forEach(g => {
+    if (Array.isArray(g.outbounds)) {
+      groupOutboundMap.set(g.tag, g);
+    }
+  });
+
+  const visitedNodes = new Set<string>();
+  const activeStack = new Set<string>();
+
+  const sanitizeDependencies = (u: string) => {
+    visitedNodes.add(u);
+    activeStack.add(u);
+
+    const grp = groupOutboundMap.get(u);
+    if (grp && Array.isArray(grp.outbounds)) {
+      const safeOutbounds: string[] = [];
+      for (const v of grp.outbounds) {
+        if (groupOutboundMap.has(v)) {
+          if (activeStack.has(v)) {
+            // Circular dependency detected! Drop the back-edge to break the cycle.
+            console.warn(`[Singbox] Dropped circular outbound dependency: ${u} -> ${v}`);
+            continue;
+          }
+          if (!visitedNodes.has(v)) {
+            sanitizeDependencies(v);
+          }
+        }
+        safeOutbounds.push(v);
+      }
+      grp.outbounds = safeOutbounds.length > 0 ? safeOutbounds : ['🎯 本地直连'];
+    }
+
+    activeStack.delete(u);
+  };
+
+  for (const tag of groupOutboundMap.keys()) {
+    if (!visitedNodes.has(tag)) {
+      sanitizeDependencies(tag);
+    }
+  }
+
   doc.outbounds = [...groupOutbounds, ...customTemplateOutbounds, ...proxyOutbounds];
 
   // 2. Build Remote Rule Sets

@@ -196,6 +196,18 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     return nodes.some(n => n.name.trim().toLowerCase() === clean);
   };
 
+  const isSourceValid = (sourceName: string): boolean => {
+    if (!sourceName || !sourceName.trim()) return false;
+    const clean = cleanName(sourceName, sourceIcons).toLowerCase();
+    const raw = sourceName.trim().toLowerCase();
+    return sources.some(s => {
+      const sId = (s.id || '').trim().toLowerCase();
+      const sName = (s.name || '').trim().toLowerCase();
+      const sClean = cleanName(s.name, sourceIcons).toLowerCase();
+      return sId === raw || sName === raw || sClean === clean || sId === clean;
+    });
+  };
+
   const hasCustomGroup = groups.some(g => {
     const clean = cleanName(g.name, sourceIcons).toLowerCase();
     return clean === customSourceName.toLowerCase() || clean === '自建节点' || clean === '独立节点组' || clean === '手工自建' || clean === 'custom' || g.id === 'grp-src-custom';
@@ -227,10 +239,13 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
     setEditingGroup(group);
     // 静默过滤已失效或已不存在的虚假/残留项，不打扰用户
     const validProxies = (group.proxies || []).filter(isProxyValid);
+    const rawSources = group.sources || group.use || [];
+    const validSources = rawSources.filter(isSourceValid);
     setFormData({
       ...group,
       proxies: validProxies,
-      use: group.use ? [...group.use] : [],
+      sources: validSources,
+      use: validSources,
     });
   };
 
@@ -240,12 +255,15 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
 
     // 保存时自动清洗，剔除无效项
     const cleanProxies = (formData.proxies || []).filter(isProxyValid);
+    const rawSources = formData.sources || formData.use || [];
+    const cleanSources = rawSources.filter(isSourceValid);
 
     const payload = {
       ...formData,
       name: formData.name.trim(),
       proxies: cleanProxies,
-      use: formData.use || [],
+      sources: cleanSources,
+      use: cleanSources,
       filter: formData.filter?.trim() || '',
     };
 
@@ -392,8 +410,9 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
         {groups.map(group => {
-          const hasProxies = group.proxies && group.proxies.length > 0;
-          const hasUse = group.use && group.use.length > 0;
+          const hasProxies = group.proxies && group.proxies.filter(isProxyValid).length > 0;
+          const validMountedSources = (group.sources || group.use || []).filter(isSourceValid);
+          const hasUse = validMountedSources.length > 0;
           const isFilter = Boolean(group.filter);
           const directNodes = resolveNodesForGroup(group, nodes, sources, sourceIcons);
           const isExpanded = expandedGroupId === group.id;
@@ -475,7 +494,7 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                   {hasUse && (
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-medium text-[#9E9A91]">挂载订阅:</span>
-                      {group.use!.map((u, idx) => {
+                      {validMountedSources.map((u, idx) => {
                         const cleanLabel = cleanName(u, sourceIcons);
                         const count = getNodeCountForOutbound(u);
                         const matchedSrc = sources.find(
