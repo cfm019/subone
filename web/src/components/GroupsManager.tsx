@@ -73,64 +73,46 @@ export function resolveNodesForGroup(
 ): ProxyNode[] {
   if (!allNodes || allNodes.length === 0) return [];
 
-  // 1. If filter is defined
+  // 1. Determine candidate nodes based on group.sources / group.use
+  let candidateNodes = allNodes;
+  const targetSources = (group.sources && group.sources.length > 0)
+    ? group.sources
+    : (group.use && group.use.length > 0 ? group.use : []);
+
+  if (targetSources.length > 0) {
+    const targetNormalized = new Set(targetSources.map(s => cleanName(s, icons).toLowerCase()));
+    candidateNodes = allNodes.filter(n => {
+      const srcName = cleanName(n.sourceName || '', icons).toLowerCase();
+      const srcId = (n.sourceId || '').trim().toLowerCase();
+      return targetNormalized.has(srcName) || targetNormalized.has(srcId) ||
+        (srcId === 'custom' && (targetNormalized.has('自建节点') || targetNormalized.has('独立节点组') || targetNormalized.has('手工自建')));
+    });
+  }
+
+  // 2. If filter regex is defined, filter candidateNodes
   if (group.filter) {
     const cleanRegex = group.filter.replace(/^\(\?i\)/, '');
     try {
       const reg = new RegExp(cleanRegex, 'i');
-      return allNodes.filter(n => reg.test(n.name));
+      return candidateNodes.filter(n => reg.test(n.name));
     } catch {
       return [];
     }
   }
 
-  // 2. If use is defined (e.g. use: ['自建'] or use: ['🖥️ 独立节点组'] or use: ['HK优选'])
-  if (group.use && group.use.length > 0) {
-    const matchedNodes: ProxyNode[] = [];
-    const matchedNodeIds = new Set<string>();
-
-    for (const u of group.use) {
-      const uClean = cleanName(u, icons).toLowerCase();
-      const matchedSrc = sources.find(
-        s => cleanName(s.name, icons).toLowerCase() === uClean ||
-          s.id.toLowerCase() === uClean ||
-          (s.id === 'custom' && (uClean === '自建节点' || uClean === '独立节点组' || uClean === '手工自建' || uClean === 'custom'))
-      );
-      if (matchedSrc && Array.isArray(matchedSrc.nodes) && matchedSrc.nodes.length > 0) {
-        matchedSrc.nodes.forEach(n => {
-          if (!matchedNodeIds.has(n.id)) {
-            matchedNodes.push(n);
-            matchedNodeIds.add(n.id);
-          }
-        });
-      }
-    }
-
-    if (matchedNodes.length > 0) {
-      return matchedNodes;
-    }
-
-    const useNormalized = new Set(
-      group.use.map(u => cleanName(u, icons).toLowerCase())
-    );
-    return allNodes.filter(n => {
-      const srcName = cleanName(n.sourceName || '', icons).toLowerCase();
-      const srcId = (n.sourceId || '').trim().toLowerCase();
-      return useNormalized.has(srcName) || useNormalized.has(srcId) || (srcId === 'custom' && (useNormalized.has('自建节点') || useNormalized.has('独立节点组') || useNormalized.has('手工自建')));
-    });
-  }
-
   // 3. Match group name to source name (e.g. group named "✨ HK优选" or "🖥️ 独立节点组")
-  const cleanGroupName = cleanName(group.name, icons).toLowerCase();
-  const matchedSource = sources.find(
-    s => cleanName(s.name, icons).toLowerCase() === cleanGroupName ||
-      (s.id === 'custom' && (cleanGroupName === '自建节点' || cleanGroupName === '独立节点组' || cleanGroupName === '手工自建' || cleanGroupName === 'custom' || cleanName(s.name, icons).toLowerCase() === cleanGroupName))
-  );
-  if (matchedSource) {
-    if (Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
-      return matchedSource.nodes;
+  if (targetSources.length === 0) {
+    const cleanGroupName = cleanName(group.name, icons).toLowerCase();
+    const matchedSource = sources.find(
+      s => cleanName(s.name, icons).toLowerCase() === cleanGroupName ||
+        (s.id === 'custom' && (cleanGroupName === '自建节点' || cleanGroupName === '独立节点组' || cleanGroupName === '手工自建' || cleanGroupName === 'custom' || cleanName(s.name, icons).toLowerCase() === cleanGroupName))
+    );
+    if (matchedSource) {
+      if (Array.isArray(matchedSource.nodes) && matchedSource.nodes.length > 0) {
+        return matchedSource.nodes;
+      }
+      return allNodes.filter(n => n.sourceId === matchedSource.id || n.sourceName === matchedSource.name);
     }
-    return allNodes.filter(n => n.sourceId === matchedSource.id || n.sourceName === matchedSource.name);
   }
 
   // 4. Global aggregated groups
@@ -145,7 +127,7 @@ export function resolveNodesForGroup(
     if (directMatches.length > 0) return directMatches;
   }
 
-  return [];
+  return candidateNodes;
 }
 
 export const GroupsManager: React.FC<GroupsManagerProps> = ({
