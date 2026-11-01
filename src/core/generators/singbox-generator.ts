@@ -674,6 +674,23 @@ export function injectUnifiedToSingbox(
     }
   }
 
+  // Collect all defined outbound tags
+  const allDefinedTags = new Set<string>();
+  groupOutbounds.forEach((g: any) => g.tag && allDefinedTags.add(g.tag));
+  customTemplateOutbounds.forEach((c: any) => c.tag && allDefinedTags.add(c.tag));
+  proxyOutbounds.forEach((p: any) => p.tag && allDefinedTags.add(p.tag));
+
+  // If a node has detour set, but the current template (and groups/nodes) does not define this detour tag,
+  // discard it from the node outbound so it cleanly falls back to the system default route.
+  proxyOutbounds.forEach((p: any) => {
+    if (p.detour && typeof p.detour === 'string') {
+      const trimmed = p.detour.trim();
+      if (!allDefinedTags.has(trimmed)) {
+        delete p.detour;
+      }
+    }
+  });
+
   doc.outbounds = [...groupOutbounds, ...customTemplateOutbounds, ...proxyOutbounds];
 
   // 2. Build Remote Rule Sets

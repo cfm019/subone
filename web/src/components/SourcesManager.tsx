@@ -58,7 +58,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   const [renamingSource, setRenamingSource] = useState<SubscriptionSource | null>(null);
   const [newGroupNameInput, setNewGroupNameInput] = useState('');
 
-  // Extract custom template outbounds for detour selection
+  // Extract custom template outbounds and existing node detours for detour selection
   const availableDetourOutbounds = useMemo(() => {
     const customTags: string[] = [];
     (templates || []).forEach(tpl => {
@@ -76,8 +76,14 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
         } catch {}
       }
     });
+    (nodes || []).forEach(n => {
+      const tag = (n.detour || '').trim();
+      if (tag && !customTags.includes(tag)) {
+        customTags.push(tag);
+      }
+    });
     return customTags;
-  }, [templates]);
+  }, [templates, nodes]);
 
   // Node edit state (name & config text & detour)
   const [editingNode, setEditingNode] = useState<{ id: string; name: string; rawText: string; detour?: string } | null>(null);
@@ -1142,14 +1148,14 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 />
               </div>
 
-              {availableDetourOutbounds.length > 0 && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-semibold text-[#1F1E1D]">
-                      底层出口 (Detour)
-                    </label>
-                    <span className="text-[10px] text-[#8C877D]">指定握手建立隧道的物理宽带出口</span>
-                  </div>
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-[#1F1E1D]">
+                    底层出口 (Detour)
+                  </label>
+                  <span className="text-[10px] text-[#8C877D]">指定握手建立隧道的物理宽带出口</span>
+                </div>
+                {availableDetourOutbounds.length > 0 ? (
                   <select
                     value={editNodeDetourInput}
                     onChange={e => setEditNodeDetourInput(e.target.value)}
@@ -1161,9 +1167,20 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                         {tag}
                       </option>
                     ))}
+                    {editNodeDetourInput && !availableDetourOutbounds.includes(editNodeDetourInput) && (
+                      <option value={editNodeDetourInput}>{editNodeDetourInput}</option>
+                    )}
                   </select>
-                </div>
-              )}
+                ) : (
+                  <input
+                    type="text"
+                    value={editNodeDetourInput}
+                    onChange={e => setEditNodeDetourInput(e.target.value)}
+                    placeholder="默认 (系统默认出口) - 留空即默认，或输入指定出口标签"
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
+                  />
+                )}
+              </div>
 
               <div className="flex justify-end gap-2 pt-2 border-t border-[#E8E2D8]">
                 <button
