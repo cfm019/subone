@@ -303,7 +303,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
           name: editNodeNameInput.trim(),
           text: editNodeTextInput.trim(),
           raw: editNodeTextInput.trim(),
-          detour: editNodeDetourInput.trim() || undefined,
+          detour: editNodeDetourInput.trim(),
         } as any);
       }
       setEditingNode(null);

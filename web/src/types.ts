@@ -10,6 +10,7 @@ export interface ProxyNode {
   countryEmoji?: string;
   network?: string;
   tls?: boolean;
+  detour?: string;
   raw?: string;
   [key: string]: any;
 }

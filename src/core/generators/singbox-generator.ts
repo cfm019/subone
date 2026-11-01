@@ -15,6 +15,8 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     }
     if (node.detour) {
       rawCopy.detour = node.detour;
+    } else {
+      delete rawCopy.detour;
     }
     return rawCopy;
   }

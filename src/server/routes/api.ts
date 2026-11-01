@@ -170,6 +170,9 @@ apiRouter.post('/api/custom-nodes', (req, res) => {
     countryEmoji: req.body.countryEmoji || '🌐',
     ...req.body,
   };
+  if (!newNode.detour) {
+    delete newNode.detour;
+  }
 
   targetSrc.nodes = [...(targetSrc.nodes || []), newNode];
   targetSrc.nodeCount = targetSrc.nodes.length;
@@ -187,7 +190,7 @@ apiRouter.post('/api/custom-nodes', (req, res) => {
 });
 
 const updateNodeHandler = (req: any, res: any) => {
-  const { name, text, rawContent, raw, ...directFields } = req.body || {};
+  const { name, text, rawContent, raw, detour, ...directFields } = req.body || {};
   const configText = (typeof text === 'string' ? text : typeof rawContent === 'string' ? rawContent : typeof raw === 'string' ? raw : '').trim();
 
   for (const s of appConfig.sources) {
@@ -223,6 +226,22 @@ const updateNodeHandler = (req: any, res: any) => {
         // If a new name is explicitly provided
         if (name && typeof name === 'string' && name.trim()) {
           updatedNode.name = name.trim();
+        }
+
+        // Explicitly handle detour
+        if ('detour' in req.body) {
+          const detourVal = typeof detour === 'string' ? detour.trim() : '';
+          if (detourVal) {
+            updatedNode.detour = detourVal;
+            if (typeof updatedNode.raw === 'object' && updatedNode.raw !== null) {
+              updatedNode.raw.detour = detourVal;
+            }
+          } else {
+            delete updatedNode.detour;
+            if (typeof updatedNode.raw === 'object' && updatedNode.raw !== null) {
+              delete updatedNode.raw.detour;
+            }
+          }
         }
 
         s.nodes[idx] = updatedNode;

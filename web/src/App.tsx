@@ -262,7 +262,16 @@ export function App() {
         ...prev,
         sources: (prev.sources || []).map(s => {
           if (s.nodes && s.nodes.some(n => n.id === id)) {
-            const nextNodes = s.nodes.map(n => (n.id === id ? { ...n, ...updates } : n));
+            const nextNodes = s.nodes.map(n => {
+              if (n.id === id) {
+                const nextNode = { ...n, ...updates };
+                if (updates.detour !== undefined && !updates.detour) {
+                  delete nextNode.detour;
+                }
+                return nextNode;
+              }
+              return n;
+            });
             return {
               ...s,
               nodes: nextNodes,
@@ -272,7 +281,16 @@ export function App() {
         }),
       };
     });
-    setNodes(prev => (prev || []).map(n => (n.id === id ? { ...n, ...updates } : n)));
+    setNodes(prev => (prev || []).map(n => {
+      if (n.id === id) {
+        const nextNode = { ...n, ...updates };
+        if (updates.detour !== undefined && !updates.detour) {
+          delete nextNode.detour;
+        }
+        return nextNode;
+      }
+      return n;
+    }));
 
     try {
       const res = await apiFetch(`${API_BASE}/custom-nodes/${id}`, {
