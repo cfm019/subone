@@ -17,13 +17,14 @@ import {
   X,
   XCircle,
 } from 'lucide-react';
-import { SubscriptionSource, ProxyNode } from '../types';
+import { SubscriptionSource, ProxyNode, ConfigTemplate } from '../types';
 import { nodeToUri } from '../utils/nodeUri';
 import { copyToClipboard } from '../utils/clipboard';
 
 interface SourcesManagerProps {
   sources: SubscriptionSource[];
   nodes?: ProxyNode[];
+  templates?: ConfigTemplate[];
   onAddSource: (source: { name: string; url?: string; type: string; filterConfig?: any }) => Promise<void>;
   onAddCustomGroup?: (name: string) => Promise<void>;
   onUpdateSource: (id: string, updates: Partial<SubscriptionSource>) => Promise<void>;
@@ -38,6 +39,7 @@ interface SourcesManagerProps {
 export const SourcesManager: React.FC<SourcesManagerProps> = ({
   sources,
   nodes,
+  templates = [],
   onAddSource,
   onAddCustomGroup,
   onUpdateSource,
@@ -56,10 +58,32 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   const [renamingSource, setRenamingSource] = useState<SubscriptionSource | null>(null);
   const [newGroupNameInput, setNewGroupNameInput] = useState('');
 
-  // Node edit state (name & config text)
-  const [editingNode, setEditingNode] = useState<{ id: string; name: string; rawText: string } | null>(null);
+  // Extract custom template outbounds for detour selection
+  const availableDetourOutbounds = useMemo(() => {
+    const customTags: string[] = [];
+    (templates || []).forEach(tpl => {
+      if (tpl.content) {
+        try {
+          const parsed = JSON.parse(tpl.content);
+          if (Array.isArray(parsed.outbounds)) {
+            parsed.outbounds.forEach((o: any) => {
+              const tag = (o?.tag || '').trim();
+              if (tag && tag !== 'REJECT' && tag !== 'GLOBAL' && !customTags.includes(tag)) {
+                customTags.push(tag);
+              }
+            });
+          }
+        } catch {}
+      }
+    });
+    return customTags;
+  }, [templates]);
+
+  // Node edit state (name & config text & detour)
+  const [editingNode, setEditingNode] = useState<{ id: string; name: string; rawText: string; detour?: string } | null>(null);
   const [editNodeNameInput, setEditNodeNameInput] = useState('');
   const [editNodeTextInput, setEditNodeTextInput] = useState('');
+  const [editNodeDetourInput, setEditNodeDetourInput] = useState('');
 
   // Target group for importing nodes
   const [targetGroupId, setTargetGroupId] = useState<string>('custom');
@@ -279,11 +303,13 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
           name: editNodeNameInput.trim(),
           text: editNodeTextInput.trim(),
           raw: editNodeTextInput.trim(),
+          detour: editNodeDetourInput.trim() || undefined,
         } as any);
       }
       setEditingNode(null);
       setEditNodeNameInput('');
       setEditNodeTextInput('');
+      setEditNodeDetourInput('');
     } catch (err: any) {
       alert(err.message || '修改节点配置失败');
     } finally {
@@ -600,6 +626,11 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                                 <span className="px-1.5 py-0.2 bg-[#F0ECE4] text-[#59554E] rounded text-[10px] font-mono font-bold">
                                   {(node.type || 'vless').toUpperCase()}
                                 </span>
+                                {node.detour && (
+                                  <span className="px-1.5 py-0.2 bg-[#FAF0EC] text-[#CC785C] border border-[#F3D5CA] rounded text-[10px] font-medium">
+                                    {node.detour}
+                                  </span>
+                                )}
                                 <span className="text-[11px] font-mono text-[#8C877D] truncate">
                                   {node.server}:{node.port}
                                 </span>
@@ -624,9 +655,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                             <button
                               onClick={() => {
                                 const uriText = (typeof node.raw === 'string' && node.raw.trim()) ? node.raw.trim() : nodeToUri(node);
-                                setEditingNode({ id: node.id, name: node.name, rawText: uriText });
+                                setEditingNode({ id: node.id, name: node.name, rawText: uriText, detour: node.detour });
                                 setEditNodeNameInput(node.name);
                                 setEditNodeTextInput(uriText);
+                                setEditNodeDetourInput(node.detour || '');
                               }}
                               className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
                               title="修改节点与配置文本"
@@ -1069,7 +1101,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 <h3 className="text-sm font-bold text-[#1F1E1D]">编辑节点配置</h3>
               </div>
               <button
-                onClick={() => setEditingNode(null)}
+                onClick={() => {
+                  setEditingNode(null);
+                  setEditNodeDetourInput('');
+                }}
                 className="text-xs text-[#9E9A91] hover:text-[#1F1E1D] p-1 cursor-pointer"
               >
                 ✕
@@ -1107,10 +1142,36 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                 />
               </div>
 
+              {availableDetourOutbounds.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-[#1F1E1D]">
+                      底层出口 (Detour)
+                    </label>
+                    <span className="text-[10px] text-[#8C877D]">指定握手建立隧道的物理宽带出口</span>
+                  </div>
+                  <select
+                    value={editNodeDetourInput}
+                    onChange={e => setEditNodeDetourInput(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white border border-[#E3DDD2] rounded-xl text-[#1F1E1D] focus:outline-none focus:border-[#CC785C]"
+                  >
+                    <option value="">默认 (系统默认出口)</option>
+                    {availableDetourOutbounds.map(tag => (
+                      <option key={tag} value={tag}>
+                        {tag}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div className="flex justify-end gap-2 pt-2 border-t border-[#E8E2D8]">
                 <button
                   type="button"
-                  onClick={() => setEditingNode(null)}
+                  onClick={() => {
+                    setEditingNode(null);
+                    setEditNodeDetourInput('');
+                  }}
                   className="px-3.5 py-1.5 text-xs font-medium btn-claude-secondary rounded-xl cursor-pointer"
                 >
                   取消

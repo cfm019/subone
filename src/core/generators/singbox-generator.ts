@@ -13,6 +13,9 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     if (rawCopy.server && typeof rawCopy.server === 'string') {
       rawCopy.server = rawCopy.server.trim().replace(/^\[(.*)\]$/, '$1');
     }
+    if (node.detour) {
+      rawCopy.detour = node.detour;
+    }
     return rawCopy;
   }
 
@@ -28,6 +31,10 @@ export function nodeToSingboxOutbound(node: ProxyNode): any {
     _sourceName: node.sourceName,
     _sourceId: node.sourceId,
   };
+
+  if (node.detour) {
+    base.detour = node.detour;
+  }
 
   if (node.type === 'ss') {
     base.method = node.method || '2022-blake3-aes-128-gcm';

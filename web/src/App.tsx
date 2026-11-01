@@ -795,6 +795,7 @@ export function App() {
           <SourcesManager
             sources={config?.sources || []}
             nodes={nodes}
+            templates={config?.templates || []}
             onAddSource={handleAddSource}
             onAddCustomGroup={handleAddCustomGroup}
             onUpdateSource={handleUpdateSource}
