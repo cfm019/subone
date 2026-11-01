@@ -825,6 +825,7 @@ export function App() {
           <RulesManager
             proxyGroups={config.proxyGroups || []}
             rulesList={config.rulesList || []}
+            templates={config.templates || []}
             onAddRule={handleAddRule}
             onImportLocalRules={handleImportLocalRules}
             onImportRemoteRules={handleImportRemoteRules}

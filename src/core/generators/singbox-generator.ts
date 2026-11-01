@@ -822,7 +822,11 @@ export function injectUnifiedToSingbox(
     );
   }
 
-  const availableGroupNames = new Set(effectiveGroups.map(g => g.name));
+  const templateCustomTags = customTemplateOutbounds.map((o: any) => (o?.tag || '').trim()).filter(Boolean);
+  const availableGroupNames = new Set([
+    ...effectiveGroups.map(g => g.name),
+    ...templateCustomTags,
+  ]);
   const fallbackGroup = effectiveGroups.find(g => g.name === '🚀 节点选择')?.name || effectiveGroups[0]?.name || '🎯 本地直连';
 
   const generatedRouteRules: any[] = [];

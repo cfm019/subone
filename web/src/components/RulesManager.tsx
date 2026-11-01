@@ -12,11 +12,12 @@ import {
   Upload,
   Zap,
 } from 'lucide-react';
-import { ProxyGroupItem, UnifiedRuleItem } from '../types';
+import { ProxyGroupItem, UnifiedRuleItem, ConfigTemplate } from '../types';
 
 interface RulesManagerProps {
   proxyGroups: ProxyGroupItem[];
   rulesList: UnifiedRuleItem[];
+  templates?: ConfigTemplate[];
   onAddRule: (rule: Partial<UnifiedRuleItem>) => Promise<void>;
   onImportLocalRules: (text: string, defaultOutbound?: string) => Promise<void>;
   onImportRemoteRules: (text: string, defaultOutbound?: string) => Promise<void>;
@@ -30,6 +31,7 @@ interface RulesManagerProps {
 export const RulesManager: React.FC<RulesManagerProps> = ({
   proxyGroups,
   rulesList,
+  templates = [],
   onAddRule,
   onImportLocalRules,
   onImportRemoteRules,
@@ -56,14 +58,31 @@ export const RulesManager: React.FC<RulesManagerProps> = ({
   const [singleOutbound, setSingleOutbound] = useState('REJECT');
 
   const availableOutbounds = useMemo(() => {
-    const list = ['REJECT', ...proxyGroups.map(g => g.name)];
+    const templateCustomOutbounds: string[] = [];
+    (templates || []).forEach(tpl => {
+      if (tpl.content) {
+        try {
+          const parsed = JSON.parse(tpl.content);
+          if (Array.isArray(parsed.outbounds)) {
+            parsed.outbounds.forEach((o: any) => {
+              const tag = (o?.tag || '').trim();
+              if (tag && tag !== 'REJECT' && tag !== 'GLOBAL' && !templateCustomOutbounds.includes(tag)) {
+                templateCustomOutbounds.push(tag);
+              }
+            });
+          }
+        } catch {}
+      }
+    });
+
+    const list = ['REJECT', ...proxyGroups.map(g => g.name), ...templateCustomOutbounds];
     rulesList.forEach(r => {
       if (r.outbound && !list.includes(r.outbound)) {
         list.push(r.outbound);
       }
     });
     return Array.from(new Set(list));
-  }, [proxyGroups, rulesList]);
+  }, [proxyGroups, rulesList, templates]);
 
   // Format rules to text for Full Text Editor
   const formatRulesToText = (rules: UnifiedRuleItem[]): string => {

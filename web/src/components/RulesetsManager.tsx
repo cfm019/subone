@@ -22,11 +22,12 @@ import {
   XCircle,
   Zap,
 } from 'lucide-react';
-import { ProxyGroupItem, UnifiedRuleItem } from '../types';
+import { ProxyGroupItem, UnifiedRuleItem, ConfigTemplate } from '../types';
 
 interface RulesetsManagerProps {
   proxyGroups: ProxyGroupItem[];
   rulesList: UnifiedRuleItem[];
+  templates?: ConfigTemplate[];
   onAddGroup: (group: Partial<ProxyGroupItem>) => Promise<void>;
   onBatchImportGroups: (text: string, replaceAll?: boolean) => Promise<void>;
   onUpdateGroup: (id: string, updates: Partial<ProxyGroupItem>) => Promise<void>;
@@ -43,6 +44,7 @@ interface RulesetsManagerProps {
 export const RulesetsManager: React.FC<RulesetsManagerProps> = ({
   proxyGroups,
   rulesList,
+  templates = [],
   onAddGroup,
   onBatchImportGroups,
   onUpdateGroup,
@@ -90,14 +92,31 @@ export const RulesetsManager: React.FC<RulesetsManagerProps> = ({
   const [newGroupType, setNewGroupType] = useState<'select' | 'urltest' | 'direct'>('select');
 
   const availableOutbounds = useMemo(() => {
-    const list = ['REJECT', ...proxyGroups.map(g => g.name)];
+    const templateCustomOutbounds: string[] = [];
+    (templates || []).forEach(tpl => {
+      if (tpl.content) {
+        try {
+          const parsed = JSON.parse(tpl.content);
+          if (Array.isArray(parsed.outbounds)) {
+            parsed.outbounds.forEach((o: any) => {
+              const tag = (o?.tag || '').trim();
+              if (tag && tag !== 'REJECT' && tag !== 'GLOBAL' && !templateCustomOutbounds.includes(tag)) {
+                templateCustomOutbounds.push(tag);
+              }
+            });
+          }
+        } catch {}
+      }
+    });
+
+    const list = ['REJECT', ...proxyGroups.map(g => g.name), ...templateCustomOutbounds];
     rulesList.forEach(r => {
       if (r.outbound && !list.includes(r.outbound)) {
         list.push(r.outbound);
       }
     });
     return Array.from(new Set(list));
-  }, [proxyGroups, rulesList]);
+  }, [proxyGroups, rulesList, templates]);
 
   // Format rules to text for Full Text Editor
   const formatRulesToText = (rules: UnifiedRuleItem[]): string => {
