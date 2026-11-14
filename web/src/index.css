@@ -73,3 +73,110 @@
 ::-webkit-scrollbar-thumb:hover {
   background: #BDB6AA;
 }
+
+/* Visually hidden status region for screen reader announcements */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Root dragging cursor override */
+html.is-dragging-node,
+html.is-dragging-node * {
+  cursor: grabbing !important;
+}
+
+/* Drag handle styles */
+.node-drag-handle {
+  cursor: grab;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.node-drag-handle:is(:hover, :focus-visible) {
+  background-color: #EFEAE2;
+  color: #1F1E1D;
+  outline: none;
+}
+
+.node-drag-handle[aria-pressed="true"] {
+  background-color: #CC785C;
+  color: #FFFFFF;
+}
+
+/* Node item focus & elevation */
+.node-item {
+  position: relative;
+  view-transition-name: match-element;
+  scroll-margin-block: 0.75rem;
+}
+
+.node-item:has(.node-drag-handle:focus-visible) {
+  outline: 2px solid #CC785C;
+  outline-offset: -2px;
+  background-color: #FCFAF7;
+  z-index: 2;
+}
+
+.node-item[data-grabbed="true"] {
+  z-index: 20;
+  background-color: #FFFFFF;
+  box-shadow: 0 8px 20px -4px rgba(31, 30, 29, 0.14), 0 2px 6px -1px rgba(31, 30, 29, 0.08);
+  border-radius: 0.5rem;
+}
+
+.node-item[data-pointer-dragging="true"] {
+  pointer-events: none;
+}
+
+/* Drop marker on list container */
+.node-reorder-list {
+  position: relative;
+  --drop-marker-color: #CC785C;
+}
+
+@media (forced-colors: active) {
+  .node-reorder-list {
+    --drop-marker-color: Highlight;
+  }
+}
+
+.node-reorder-list[data-drop]::before,
+.node-reorder-list[data-drop]::after {
+  content: "";
+  position: fixed;
+  pointer-events: none;
+  z-index: 50;
+}
+
+.node-reorder-list[data-drop]::before {
+  left: calc(var(--drop-x, 0px) - 4px);
+  top: calc(var(--drop-y, 0px) - 4px);
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  border: 2px solid var(--drop-marker-color);
+  background-color: #FFFFFF;
+}
+
+.node-reorder-list[data-drop]::after {
+  left: calc(var(--drop-x, 0px) + 4px);
+  top: calc(var(--drop-y, 0px) - 1px);
+  width: calc(var(--drop-w, 0px) - 4px);
+  height: 2px;
+  background-color: var(--drop-marker-color);
+  border-radius: 9999px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none;
+  }
+}

@@ -127,7 +127,26 @@ apiRouter.post('/api/custom-nodes/import', (req, res) => {
   }
 
   if (replaceAll) {
-    targetSrc.nodes = parsedNodes;
+    const oldNodes = targetSrc.nodes || [];
+    const usedOldIndices = new Set<number>();
+    targetSrc.nodes = parsedNodes.map(n => {
+      const matchIdx = oldNodes.findIndex((old, idx) =>
+        !usedOldIndices.has(idx) &&
+        ((old.name === n.name && old.server === n.server && old.port === n.port) ||
+         (old.server === n.server && old.port === n.port) ||
+         old.name === n.name)
+      );
+      if (matchIdx !== -1) {
+        usedOldIndices.add(matchIdx);
+        const matchedOld = oldNodes[matchIdx];
+        return {
+          ...n,
+          id: matchedOld.id,
+          ...(matchedOld.detour && !n.detour ? { detour: matchedOld.detour } : {}),
+        };
+      }
+      return n;
+    });
   } else {
     const existingIds = new Set((targetSrc.nodes || []).map(n => `${n.server}:${n.port}:${n.name}`));
     const newOnes = parsedNodes.filter(n => !existingIds.has(`${n.server}:${n.port}:${n.name}`));
@@ -300,6 +319,43 @@ apiRouter.post('/api/sources/:id/clear-nodes', (req, res) => {
   saveConfig(appConfig);
   setGlobalNodesCache(collectNodesFromSources(appConfig));
   res.json({ success: true, message: 'Nodes cleared' });
+});
+
+apiRouter.put('/api/sources/:id/nodes/reorder', (req, res) => {
+  const source = appConfig.sources.find(s => s.id === req.params.id);
+  if (!source) {
+    return res.status(404).json({ success: false, message: 'Source not found' });
+  }
+  const { nodeIds } = req.body || {};
+  if (!Array.isArray(nodeIds)) {
+    return res.status(400).json({ success: false, message: 'nodeIds array is required' });
+  }
+
+  const currentNodes = source.nodes || [];
+  const nodeMap = new Map<string, ProxyNode>();
+  currentNodes.forEach(n => nodeMap.set(n.id, n));
+
+  const reordered: ProxyNode[] = [];
+  const seenIds = new Set<string>();
+  for (const id of nodeIds) {
+    const found = nodeMap.get(id);
+    if (found && !seenIds.has(id)) {
+      reordered.push(found);
+      seenIds.add(id);
+    }
+  }
+  // Keep any remaining nodes that weren't in nodeIds at the end so no node is lost
+  for (const n of currentNodes) {
+    if (!seenIds.has(n.id)) {
+      reordered.push(n);
+    }
+  }
+
+  source.nodes = reordered;
+  source.nodeCount = reordered.length;
+  saveConfig(appConfig);
+  setGlobalNodesCache(collectNodesFromSources(appConfig));
+  res.json({ success: true, data: source.nodes });
 });
 
 // 3. Network Sources Management (网络订阅源与自建节点组)

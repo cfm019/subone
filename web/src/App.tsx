@@ -328,6 +328,52 @@ export function App() {
     }
   };
 
+  const handleReorderSourceNodes = async (sourceId: string, newNodes: ProxyNode[]) => {
+    // 0ms Optimistic UI update
+    setConfig(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        sources: (prev.sources || []).map(s =>
+          s.id === sourceId ? { ...s, nodes: newNodes, nodeCount: newNodes.length } : s
+        ),
+      };
+    });
+    setNodes(prev => {
+      if (!prev) return prev;
+      const sourceNodeIdSet = new Set(newNodes.map(n => n.id));
+      const result: ProxyNode[] = [];
+      let inserted = false;
+      for (const n of prev) {
+        if (n.sourceId === sourceId || sourceNodeIdSet.has(n.id)) {
+          if (!inserted) {
+            result.push(...newNodes);
+            inserted = true;
+          }
+        } else {
+          result.push(n);
+        }
+      }
+      return result;
+    });
+
+    try {
+      const res = await apiFetch(`${API_BASE}/sources/${sourceId}/nodes/reorder`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nodeIds: newNodes.map(n => n.id) }),
+      });
+      if (!res.ok) {
+        await fetchData();
+      } else {
+        fetchNodesOnly();
+      }
+    } catch (err) {
+      console.error('handleReorderSourceNodes error:', err);
+      await fetchData();
+    }
+  };
+
   const handleAddCustomGroup = async (name: string) => {
     try {
       setErrorMsg(null);
@@ -823,6 +869,7 @@ export function App() {
             onImportCustomNodes={handleImportCustomNodes}
             onUpdateCustomNode={handleUpdateCustomNode}
             onDeleteCustomNode={handleDeleteCustomNode}
+            onReorderNodes={handleReorderSourceNodes}
           />
         )}
 

@@ -1,5 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
+  ArrowUpToLine,
   Check,
   CheckCircle2,
   ChevronDown,
@@ -8,6 +12,7 @@ import {
   Eraser,
   ExternalLink,
   FileText,
+  GripVertical,
   Layers,
   Plus,
   RefreshCw,
@@ -34,6 +39,7 @@ interface SourcesManagerProps {
   onImportCustomNodes: (text: string, replaceAll?: boolean, targetSourceId?: string) => Promise<void>;
   onUpdateCustomNode?: (id: string, updates: Partial<ProxyNode>) => Promise<void>;
   onDeleteCustomNode: (id: string) => Promise<void>;
+  onReorderNodes?: (sourceId: string, newNodes: ProxyNode[]) => Promise<void>;
 }
 
 export const SourcesManager: React.FC<SourcesManagerProps> = ({
@@ -49,6 +55,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   onImportCustomNodes,
   onUpdateCustomNode,
   onDeleteCustomNode,
+  onReorderNodes,
 }) => {
   // Modal states
   const [showAddNetworkModal, setShowAddNetworkModal] = useState(false);
@@ -114,6 +121,477 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
   // Accordion expanded source IDs (默认全部收起)
   const [expandedSourceIds, setExpandedSourceIds] = useState<Set<string>>(new Set());
+
+  // Reorder & Drag-and-drop states
+  const [reorderAnnouncement, setReorderAnnouncement] = useState('');
+  const announceTimerRef = useRef<number | null>(null);
+  const listRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  // Keyboard grab-move-drop state
+  const [kbGrabbedNode, setKbGrabbedNode] = useState<{
+    sourceId: string;
+    nodeId: string;
+    initialNodes: ProxyNode[];
+  } | null>(null);
+
+  // Pointer drag state ref
+  interface PointerDragState {
+    pointerId: number;
+    sourceId: string;
+    nodeId: string;
+    sourceIdx: number;
+    targetIdx: number;
+    startY: number;
+    startScrollY: number;
+    lastClientY: number;
+    itemEl: HTMLElement;
+    listEl: HTMLElement;
+    handleEl: HTMLElement;
+    rafId: number | null;
+  }
+  const pointerDragRef = useRef<PointerDragState | null>(null);
+
+  const announceReorder = (message: string, delayMs = 80) => {
+    if (announceTimerRef.current) {
+      window.clearTimeout(announceTimerRef.current);
+    }
+    setReorderAnnouncement('');
+    announceTimerRef.current = window.setTimeout(() => {
+      setReorderAnnouncement(message);
+    }, delayMs);
+  };
+
+  useEffect(() => {
+    return () => {
+      if (announceTimerRef.current) {
+        window.clearTimeout(announceTimerRef.current);
+      }
+      document.documentElement.classList.remove('is-dragging-node');
+    };
+  }, []);
+
+  const commitNodeOrder = async (source: SubscriptionSource, nextNodes: ProxyNode[]) => {
+    if (onReorderNodes) {
+      await onReorderNodes(source.id, nextNodes);
+    } else {
+      await onUpdateSource(source.id, { nodes: nextNodes });
+    }
+  };
+
+  const runReorderWithFlip = (
+    sourceId: string,
+    performUpdate: () => void,
+    movedNodeId?: string,
+    releasedTranslateY?: number
+  ) => {
+    const listEl = listRefs.current[sourceId];
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (!listEl || prefersReducedMotion) {
+      performUpdate();
+      return;
+    }
+
+    const oldRects = new Map<string, DOMRect>();
+    const children = Array.from(listEl.querySelectorAll<HTMLElement>('[data-node-id]'));
+    children.forEach(el => {
+      const id = el.dataset.nodeId;
+      if (id) {
+        el.getAnimations().forEach(anim => anim.finish());
+        oldRects.set(id, el.getBoundingClientRect());
+      }
+    });
+
+    performUpdate();
+
+    requestAnimationFrame(() => {
+      const currentListEl = listRefs.current[sourceId];
+      if (!currentListEl) return;
+      const newChildren = Array.from(currentListEl.querySelectorAll<HTMLElement>('[data-node-id]'));
+      newChildren.forEach(el => {
+        const id = el.dataset.nodeId;
+        if (!id) return;
+        const oldRect = oldRects.get(id);
+        if (!oldRect) return;
+        const newRect = el.getBoundingClientRect();
+        let dy = oldRect.top - newRect.top;
+        if (id === movedNodeId && releasedTranslateY !== undefined) {
+          dy += releasedTranslateY;
+        }
+        if (Math.abs(dy) > 1) {
+          el.animate(
+            [{ translate: `0px ${dy}px` }, { translate: '0px 0px' }],
+            { duration: 180, easing: 'cubic-bezier(0.22, 1, 0.36, 1)' }
+          );
+        }
+      });
+    });
+  };
+
+  // Move single node up / down / top
+  const handleMoveNode = async (
+    source: SubscriptionSource,
+    fromIdx: number,
+    toIdx: number,
+    focusTargetSelector?: string
+  ) => {
+    const currentNodes = source.nodes || [];
+    if (
+      fromIdx < 0 ||
+      fromIdx >= currentNodes.length ||
+      toIdx < 0 ||
+      toIdx >= currentNodes.length ||
+      fromIdx === toIdx
+    ) {
+      return;
+    }
+    const nextNodes = [...currentNodes];
+    const [moved] = nextNodes.splice(fromIdx, 1);
+    nextNodes.splice(toIdx, 0, moved);
+
+    runReorderWithFlip(
+      source.id,
+      () => {
+        commitNodeOrder(source, nextNodes);
+      },
+      moved.id
+    );
+
+    requestAnimationFrame(() => {
+      const listEl = listRefs.current[source.id];
+      const itemEl = listEl?.querySelector<HTMLElement>(`[data-node-id="${CSS.escape(moved.id)}"]`);
+      if (itemEl) {
+        itemEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+        if (focusTargetSelector) {
+          const targetBtn = itemEl.querySelector<HTMLElement>(focusTargetSelector);
+          if (targetBtn && !(targetBtn as HTMLButtonElement).disabled) {
+            targetBtn.focus({ preventScroll: true });
+          } else {
+            const altBtn = itemEl.querySelector<HTMLElement>('[data-move-btn]:not(:disabled)');
+            altBtn?.focus({ preventScroll: true });
+          }
+        }
+      }
+    });
+
+    announceReorder(`已将节点 ${moved.name} 移至第 ${toIdx + 1} 位（共 ${nextNodes.length} 个）`, 500);
+  };
+
+  // Bulk sort nodes with View Transition (per dynamic-sort guide)
+  const handleQuickSortNodes = (
+    source: SubscriptionSource,
+    mode: 'name-asc' | 'country' | 'reverse'
+  ) => {
+    const currentNodes = source.nodes || [];
+    if (currentNodes.length <= 1) return;
+
+    const nextNodes = [...currentNodes];
+    let label = '';
+    if (mode === 'name-asc') {
+      nextNodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { numeric: true }));
+      label = '按名称升序排列';
+    } else if (mode === 'country') {
+      nextNodes.sort(
+        (a, b) =>
+          (a.countryCode || 'ZZ').localeCompare(b.countryCode || 'ZZ') ||
+          a.name.localeCompare(b.name, 'zh-CN', { numeric: true })
+      );
+      label = '按地区归类排列';
+    } else if (mode === 'reverse') {
+      nextNodes.reverse();
+      label = '已反转节点顺序';
+    }
+
+    const listEl = listRefs.current[source.id];
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const applyUpdate = () => {
+      commitNodeOrder(source, nextNodes);
+    };
+
+    if (!prefersReducedMotion && currentNodes.length <= 200) {
+      const anyListEl = listEl as any;
+      if (anyListEl && typeof anyListEl.startViewTransition === 'function') {
+        anyListEl.startViewTransition(applyUpdate);
+      } else if (typeof (document as any).startViewTransition === 'function') {
+        (document as any).startViewTransition(applyUpdate);
+      } else {
+        applyUpdate();
+      }
+    } else {
+      applyUpdate();
+    }
+
+    announceReorder(`${source.name}：${label}，共 ${nextNodes.length} 个节点`);
+  };
+
+  // Update drop marker CSS variables on list container from layout midpoints
+  const updateDropMarker = (drag: PointerDragState, clientY: number) => {
+    const { listEl, sourceIdx } = drag;
+    const items = Array.from(listEl.querySelectorAll<HTMLElement>('[data-node-id]'));
+    if (items.length === 0) return;
+
+    const listRect = listEl.getBoundingClientRect();
+    const clampedY = Math.max(listRect.top, Math.min(listRect.bottom, clientY));
+    const pointerOffsetInList = clampedY - listRect.top - listEl.clientTop + listEl.scrollTop;
+
+    let insertBeforeIdx = items.length;
+    for (let i = 0; i < items.length; i++) {
+      const el = items[i];
+      const midpoint = el.offsetTop + el.offsetHeight / 2;
+      if (pointerOffsetInList < midpoint) {
+        insertBeforeIdx = i;
+        break;
+      }
+    }
+
+    const finalIdx = insertBeforeIdx > sourceIdx ? insertBeforeIdx - 1 : insertBeforeIdx;
+    drag.targetIdx = finalIdx;
+
+    // Skip no-op drop marker when drop spot is the item's own slot
+    if (insertBeforeIdx === sourceIdx || insertBeforeIdx === sourceIdx + 1) {
+      delete listEl.dataset.drop;
+      listEl.style.removeProperty('--drop-x');
+      listEl.style.removeProperty('--drop-y');
+      listEl.style.removeProperty('--drop-w');
+      return;
+    }
+
+    let markerY = listRect.top;
+    if (insertBeforeIdx === 0) {
+      markerY = items[0].getBoundingClientRect().top;
+    } else if (insertBeforeIdx >= items.length) {
+      markerY = items[items.length - 1].getBoundingClientRect().bottom;
+    } else {
+      const prevRect = items[insertBeforeIdx - 1].getBoundingClientRect();
+      const nextRect = items[insertBeforeIdx].getBoundingClientRect();
+      markerY = (prevRect.bottom + nextRect.top) / 2;
+    }
+
+    listEl.dataset.drop = 'true';
+    listEl.style.setProperty('--drop-x', `${listRect.left + 12}px`);
+    listEl.style.setProperty('--drop-y', `${markerY}px`);
+    listEl.style.setProperty('--drop-w', `${Math.max(0, listRect.width - 24)}px`);
+  };
+
+  // Start pointer drag on handle
+  const handlePointerDownHandle = (
+    e: React.PointerEvent<HTMLButtonElement>,
+    source: SubscriptionSource,
+    node: ProxyNode,
+    idx: number
+  ) => {
+    if (e.button !== 0 || pointerDragRef.current) return;
+    const listEl = listRefs.current[source.id];
+    const handleEl = e.currentTarget;
+    const itemEl = handleEl.closest<HTMLElement>('[data-node-id]');
+    if (!listEl || !itemEl) return;
+
+    e.preventDefault();
+    try {
+      handleEl.setPointerCapture(e.pointerId);
+    } catch {}
+
+    document.documentElement.classList.add('is-dragging-node');
+    itemEl.dataset.grabbed = 'true';
+    itemEl.dataset.pointerDragging = 'true';
+    itemEl.style.scale = '1.012';
+
+    const dragState: PointerDragState = {
+      pointerId: e.pointerId,
+      sourceId: source.id,
+      nodeId: node.id,
+      sourceIdx: idx,
+      targetIdx: idx,
+      startY: e.clientY,
+      startScrollY: window.scrollY,
+      lastClientY: e.clientY,
+      itemEl,
+      listEl,
+      handleEl,
+      rafId: null,
+    };
+    pointerDragRef.current = dragState;
+
+    let lastFrameTime = performance.now();
+    const autoScrollLoop = (now: number) => {
+      const active = pointerDragRef.current;
+      if (!active) return;
+      const dt = Math.min(50, now - lastFrameTime) / 1000;
+      lastFrameTime = now;
+
+      const edgeZone = Math.min(96, window.innerHeight / 3);
+      const y = active.lastClientY;
+      let scrollDelta = 0;
+      if (y < edgeZone) {
+        const ratio = Math.min(2, (edgeZone - y) / edgeZone);
+        scrollDelta = -480 * ratio * dt;
+      } else if (y > window.innerHeight - edgeZone) {
+        const ratio = Math.min(2, (y - (window.innerHeight - edgeZone)) / edgeZone);
+        scrollDelta = 480 * ratio * dt;
+      }
+
+      if (Math.abs(scrollDelta) >= 0.5) {
+        window.scrollBy(0, scrollDelta);
+        const dy = active.lastClientY - active.startY + (window.scrollY - active.startScrollY);
+        active.itemEl.style.translate = `0px ${dy}px`;
+        updateDropMarker(active, active.lastClientY);
+      }
+
+      active.rafId = requestAnimationFrame(autoScrollLoop);
+    };
+    dragState.rafId = requestAnimationFrame(autoScrollLoop);
+
+    const cleanupDragVisuals = () => {
+      const active = pointerDragRef.current;
+      if (!active) return;
+      if (active.rafId !== null) {
+        cancelAnimationFrame(active.rafId);
+      }
+      document.documentElement.classList.remove('is-dragging-node');
+      delete active.listEl.dataset.drop;
+      active.listEl.style.removeProperty('--drop-x');
+      active.listEl.style.removeProperty('--drop-y');
+      active.listEl.style.removeProperty('--drop-w');
+      delete active.itemEl.dataset.grabbed;
+      delete active.itemEl.dataset.pointerDragging;
+      active.itemEl.style.removeProperty('translate');
+      active.itemEl.style.removeProperty('scale');
+      try {
+        if (active.handleEl.hasPointerCapture(active.pointerId)) {
+          active.handleEl.releasePointerCapture(active.pointerId);
+        }
+      } catch {}
+      window.removeEventListener('pointermove', onPointerMove);
+      window.removeEventListener('pointerup', onPointerUp);
+      window.removeEventListener('pointercancel', onPointerCancel);
+      window.removeEventListener('keydown', onKeyDown, true);
+      pointerDragRef.current = null;
+    };
+
+    const onPointerMove = (ev: PointerEvent) => {
+      const active = pointerDragRef.current;
+      if (!active || ev.pointerId !== active.pointerId) return;
+      active.lastClientY = ev.clientY;
+      const dy = ev.clientY - active.startY + (window.scrollY - active.startScrollY);
+      active.itemEl.style.translate = `0px ${dy}px`;
+      updateDropMarker(active, ev.clientY);
+    };
+
+    const onPointerUp = (ev: PointerEvent) => {
+      const active = pointerDragRef.current;
+      if (!active || ev.pointerId !== active.pointerId) return;
+      const { sourceIdx, targetIdx, itemEl: draggedEl, handleEl: hEl } = active;
+      const releasedDy = ev.clientY - active.startY + (window.scrollY - active.startScrollY);
+      cleanupDragVisuals();
+
+      if (sourceIdx !== targetIdx) {
+        const currentNodes = source.nodes || [];
+        const nextNodes = [...currentNodes];
+        const [moved] = nextNodes.splice(sourceIdx, 1);
+        nextNodes.splice(targetIdx, 0, moved);
+        runReorderWithFlip(
+          source.id,
+          () => {
+            commitNodeOrder(source, nextNodes);
+          },
+          moved.id,
+          releasedDy
+        );
+        requestAnimationFrame(() => {
+          draggedEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          hEl.focus({ preventScroll: true });
+        });
+        announceReorder(`已将节点 ${moved.name} 移至第 ${targetIdx + 1} 位（共 ${nextNodes.length} 个）`, 500);
+      } else if (Math.abs(releasedDy) > 2 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+        draggedEl.animate(
+          [{ translate: `0px ${releasedDy}px` }, { translate: '0px 0px' }],
+          { duration: 150, easing: 'ease-out' }
+        );
+      }
+    };
+
+    const onPointerCancel = (ev: PointerEvent) => {
+      const active = pointerDragRef.current;
+      if (!active || ev.pointerId !== active.pointerId) return;
+      cleanupDragVisuals();
+      announceReorder(`已取消移动节点 ${node.name}`);
+    };
+
+    const onKeyDown = (ev: KeyboardEvent) => {
+      if (ev.key === 'Escape' && pointerDragRef.current) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        const active = pointerDragRef.current;
+        const releasedDy = active.lastClientY - active.startY + (window.scrollY - active.startScrollY);
+        const el = active.itemEl;
+        cleanupDragVisuals();
+        if (Math.abs(releasedDy) > 2 && !window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+          el.animate(
+            [{ translate: `0px ${releasedDy}px` }, { translate: '0px 0px' }],
+            { duration: 150, easing: 'ease-out' }
+          );
+        }
+        announceReorder(`已取消移动节点 ${node.name}`);
+      }
+    };
+
+    window.addEventListener('pointermove', onPointerMove);
+    window.addEventListener('pointerup', onPointerUp);
+    window.addEventListener('pointercancel', onPointerCancel);
+    window.addEventListener('keydown', onKeyDown, true);
+  };
+
+  // Keyboard Grab-Move-Drop handler on drag handle
+  const handleKeyDownHandle = (
+    e: React.KeyboardEvent<HTMLButtonElement>,
+    source: SubscriptionSource,
+    node: ProxyNode,
+    idx: number
+  ) => {
+    const isGrabbed = kbGrabbedNode?.sourceId === source.id && kbGrabbedNode?.nodeId === node.id;
+
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      if (!isGrabbed) {
+        setKbGrabbedNode({
+          sourceId: source.id,
+          nodeId: node.id,
+          initialNodes: [...(source.nodes || [])],
+        });
+        announceReorder(
+          `已抓取节点 ${node.name}（当前第 ${idx + 1} 位），按上下方向键移动，按空格或回车放下，按 Esc 取消`
+        );
+      } else {
+        setKbGrabbedNode(null);
+        announceReorder(`已放下节点 ${node.name}，当前位于第 ${idx + 1} 位`);
+      }
+      return;
+    }
+
+    if (!isGrabbed) return;
+
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      const initial = kbGrabbedNode.initialNodes;
+      setKbGrabbedNode(null);
+      runReorderWithFlip(
+        source.id,
+        () => {
+          commitNodeOrder(source, initial);
+        },
+        node.id
+      );
+      announceReorder(`已取消移动节点 ${node.name}，恢复原位`);
+      return;
+    }
+
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      const targetIdx = e.key === 'ArrowUp' ? idx - 1 : idx + 1;
+      const currentNodes = source.nodes || [];
+      if (targetIdx < 0 || targetIdx >= currentNodes.length) return;
+      handleMoveNode(source, idx, targetIdx, '.node-drag-handle');
+    }
+  };
 
 
 
@@ -369,6 +847,10 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
   return (
     <div className="max-w-6xl mx-auto space-y-5 pb-16">
+      <p id="node-reorder-status" role="status" className="visually-hidden">
+        {reorderAnnouncement}
+      </p>
+
       {/* 1. 顶部操作栏卡片 */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 bg-white p-4 rounded-2xl border border-[#E3DDD2] shadow-2xs">
         <div>
@@ -612,82 +1094,209 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
 
               {/* 3. 展开区域：就地查看节点详情 (Accordion) */}
               {isExpanded && (
-                <div className="border-t border-[#F0ECE4] bg-white p-4 animate-in fade-in duration-150">
+                <div className="border-t border-[#F0ECE4] bg-white p-4 animate-in fade-in duration-150 space-y-2.5">
+                  {nodesList.length > 1 && (
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-1 text-[11px] text-[#78746D]">
+                      <div className="flex items-center gap-1.5">
+                        <ArrowUpDown className="w-3.5 h-3.5 text-[#CC785C]" />
+                        <span>拖拽左侧手柄或点击右侧箭头可调整节点顺序</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[#9E9A91]">快捷排序:</span>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickSortNodes(source, 'country')}
+                          className="px-2 py-0.5 rounded-md bg-[#FAF8F5] hover:bg-[#F0ECE4] text-[#59554E] hover:text-[#1F1E1D] border border-[#E8E4DC] transition-colors cursor-pointer font-medium"
+                          title="按国家/地区归类排序"
+                        >
+                          按地区
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickSortNodes(source, 'name-asc')}
+                          className="px-2 py-0.5 rounded-md bg-[#FAF8F5] hover:bg-[#F0ECE4] text-[#59554E] hover:text-[#1F1E1D] border border-[#E8E4DC] transition-colors cursor-pointer font-medium"
+                          title="按节点名称字母数字升序排列"
+                        >
+                          按名称 A→Z
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleQuickSortNodes(source, 'reverse')}
+                          className="px-2 py-0.5 rounded-md bg-[#FAF8F5] hover:bg-[#F0ECE4] text-[#59554E] hover:text-[#1F1E1D] border border-[#E8E4DC] transition-colors cursor-pointer font-medium"
+                          title="反转当前节点顺序"
+                        >
+                          反转顺序
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
                   {/* 节点列表渲染 */}
                   {nodesList.length > 0 ? (
-                    <div className="rounded-xl border border-[#EBE6DC] divide-y divide-[#F0ECE4] overflow-hidden">
-                      {nodesList.map(node => (
-                        <div
-                          key={node.id}
-                          className="px-3.5 py-2 hover:bg-[#FAF8F5] transition-colors flex items-center justify-between gap-3 text-xs group/item"
-                        >
-                          {/* 左侧：Emoji、节点名、协议类型、服务器端口 */}
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <span className="text-sm shrink-0">{node.countryEmoji || '🌐'}</span>
-                            <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
-                              <span className="font-bold text-[#1F1E1D] truncate max-w-md">
-                                {node.name}
-                              </span>
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <span className="px-1.5 py-0.2 bg-[#F0ECE4] text-[#59554E] rounded text-[10px] font-mono font-bold">
-                                  {(node.type || 'vless').toUpperCase()}
+                    <div
+                      ref={el => {
+                        listRefs.current[source.id] = el;
+                      }}
+                      className="node-reorder-list rounded-xl border border-[#EBE6DC] divide-y divide-[#F0ECE4] overflow-hidden"
+                    >
+                      {nodesList.map((node, idx) => {
+                        const isKbGrabbed =
+                          kbGrabbedNode?.sourceId === source.id && kbGrabbedNode?.nodeId === node.id;
+                        return (
+                          <div
+                            key={node.id}
+                            data-node-id={node.id}
+                            data-grabbed={isKbGrabbed ? 'true' : undefined}
+                            onFocus={e => {
+                              const target = e.target as HTMLElement;
+                              if (
+                                target.matches?.(':focus-visible') &&
+                                e.currentTarget.getAnimations().length === 0
+                              ) {
+                                e.currentTarget.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+                              }
+                            }}
+                            className="node-item px-3 py-2 hover:bg-[#FAF8F5] transition-colors flex items-center justify-between gap-2.5 text-xs group/item"
+                          >
+                            {/* 左侧：拖拽手柄、Emoji、节点名、协议类型、服务器端口 */}
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              {nodesList.length > 1 && (
+                                <button
+                                  type="button"
+                                  aria-label={`调整节点 ${node.name} 的顺序（当前第 ${idx + 1} 位）`}
+                                  aria-pressed={isKbGrabbed}
+                                  onPointerDown={e => handlePointerDownHandle(e, source, node, idx)}
+                                  onKeyDown={e => handleKeyDownHandle(e, source, node, idx)}
+                                  onBlur={() => {
+                                    if (isKbGrabbed) {
+                                      setKbGrabbedNode(null);
+                                    }
+                                  }}
+                                  className="node-drag-handle p-1 -ml-1 text-[#B5AFA4] hover:text-[#59554E] rounded transition-colors shrink-0"
+                                  title="按住上下拖拽调整顺序（键盘按空格抓取后用方向键移动）"
+                                >
+                                  <GripVertical className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+
+                              <span className="text-sm shrink-0">{node.countryEmoji || '🌐'}</span>
+                              <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                                <span className="font-bold text-[#1F1E1D] truncate max-w-md">
+                                  {node.name}
                                 </span>
-                                {node.detour && (
-                                  <span className="px-1.5 py-0.2 bg-[#FAF0EC] text-[#CC785C] border border-[#F3D5CA] rounded text-[10px] font-medium">
-                                    {node.detour}
+                                <div className="flex items-center gap-1.5 shrink-0 flex-wrap">
+                                  <span className="px-1.5 py-0.2 bg-[#F0ECE4] text-[#59554E] rounded text-[10px] font-mono font-bold">
+                                    {(node.type || 'vless').toUpperCase()}
                                   </span>
-                                )}
-                                <span className="text-[11px] font-mono text-[#8C877D] truncate">
-                                  {node.server}:{node.port}
-                                </span>
+                                  {node.detour && (
+                                    <span className="px-1.5 py-0.2 bg-[#FAF0EC] text-[#CC785C] border border-[#F3D5CA] rounded text-[10px] font-medium">
+                                      {node.detour}
+                                    </span>
+                                  )}
+                                  <span className="text-[11px] font-mono text-[#8C877D] truncate">
+                                    {node.server}:{node.port}
+                                  </span>
+                                  <span
+                                    aria-hidden="true"
+                                    className="hidden group-has-[.node-drag-handle:focus-visible]/item:inline-block text-[10px] text-[#CC785C] bg-[#FAF0EC] px-1.5 py-0.2 rounded border border-[#F3DDD3]"
+                                  >
+                                    {isKbGrabbed
+                                      ? '↑↓ 移动 · Space 放下 · Esc 取消'
+                                      : 'Space 抓取排序'}
+                                  </span>
+                                </div>
                               </div>
                             </div>
-                          </div>
 
-                          {/* 右侧微操作：复制链接、改名、删除自建节点 */}
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={() => handleCopyNode(node)}
-                              className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
-                              title="复制节点链接"
-                            >
-                              {copiedNodeId === node.id ? (
-                                <Check className="w-3.5 h-3.5 text-[#367A68]" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
+                            {/* 右侧微操作：置顶、上移、下移、复制链接、改名、删除自建节点 */}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {nodesList.length > 1 && (
+                                <div className="flex items-center gap-0.5 mr-1 pr-1 border-r border-[#EBE6DC]">
+                                  <button
+                                    type="button"
+                                    data-move-btn="top"
+                                    disabled={idx === 0}
+                                    onClick={() =>
+                                      handleMoveNode(source, idx, 0, '[data-move-btn="down"]')
+                                    }
+                                    className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+                                    title="置顶此节点"
+                                    aria-label={`置顶节点 ${node.name}`}
+                                  >
+                                    <ArrowUpToLine className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    data-move-btn="up"
+                                    disabled={idx === 0}
+                                    onClick={() =>
+                                      handleMoveNode(source, idx, idx - 1, '[data-move-btn="up"]')
+                                    }
+                                    className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+                                    title="上移一位"
+                                    aria-label={`上移节点 ${node.name}`}
+                                  >
+                                    <ArrowUp className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    data-move-btn="down"
+                                    disabled={idx === nodesList.length - 1}
+                                    onClick={() =>
+                                      handleMoveNode(source, idx, idx + 1, '[data-move-btn="down"]')
+                                    }
+                                    className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer disabled:opacity-30 disabled:pointer-events-none"
+                                    title="下移一位"
+                                    aria-label={`下移节点 ${node.name}`}
+                                  >
+                                    <ArrowDown className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               )}
-                            </button>
 
-                            <button
-                              onClick={() => {
-                                const uriText = (typeof node.raw === 'string' && node.raw.trim()) ? node.raw.trim() : nodeToUri(node);
-                                setEditingNode({ id: node.id, name: node.name, rawText: uriText, detour: node.detour });
-                                setEditNodeNameInput(node.name);
-                                setEditNodeTextInput(uriText);
-                                setEditNodeDetourInput(node.detour || '');
-                              }}
-                              className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
-                              title="修改节点与配置文本"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" />
-                            </button>
+                              <button
+                                onClick={() => handleCopyNode(node)}
+                                className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
+                                title="复制节点链接"
+                              >
+                                {copiedNodeId === node.id ? (
+                                  <Check className="w-3.5 h-3.5 text-[#367A68]" />
+                                ) : (
+                                  <Copy className="w-3.5 h-3.5" />
+                                )}
+                              </button>
 
-                            {isCustom && (
                               <button
                                 onClick={() => {
-                                  if (confirm(`确定要删除节点【${node.name}】吗？`)) {
-                                    onDeleteCustomNode(node.id);
-                                  }
+                                  const uriText = (typeof node.raw === 'string' && node.raw.trim()) ? node.raw.trim() : nodeToUri(node);
+                                  setEditingNode({ id: node.id, name: node.name, rawText: uriText, detour: node.detour });
+                                  setEditNodeNameInput(node.name);
+                                  setEditNodeTextInput(uriText);
+                                  setEditNodeDetourInput(node.detour || '');
                                 }}
-                                className="p-1 text-[#9E9A91] hover:text-[#B85D3F] hover:bg-[#FAF0EC] rounded transition-colors cursor-pointer"
-                                title="删除此节点"
+                                className="p-1 text-[#9E9A91] hover:text-[#1F1E1D] hover:bg-[#EFEAE2] rounded transition-colors cursor-pointer"
+                                title="修改节点与配置文本"
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <Edit2 className="w-3.5 h-3.5" />
                               </button>
-                            )}
+
+                              {isCustom && (
+                                <button
+                                  onClick={() => {
+                                    if (confirm(`确定要删除节点【${node.name}】吗？`)) {
+                                      onDeleteCustomNode(node.id);
+                                    }
+                                  }}
+                                  className="p-1 text-[#9E9A91] hover:text-[#B85D3F] hover:bg-[#FAF0EC] rounded transition-colors cursor-pointer"
+                                  title="删除此节点"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : (
                     <div className="p-6 rounded-xl border border-dashed border-[#DFD9CF] text-center space-y-2">
