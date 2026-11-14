@@ -550,7 +550,6 @@ export const GroupsManager: React.FC<GroupsManagerProps> = ({
                           className="flex items-center justify-between gap-2 px-2 py-1 bg-white rounded-md border border-[#EBE7DF] text-[11px]"
                         >
                           <div className="flex items-center gap-1.5 min-w-0">
-                            <span className="text-xs shrink-0">{n.countryEmoji || '🌐'}</span>
                             <span className="font-medium text-[#1F1E1D] truncate">{n.name}</span>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">

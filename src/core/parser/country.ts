@@ -97,28 +97,6 @@ export const DEFAULT_COUNTRY_PATTERNS: CountryPatternRule[] = [
   }
 ];
 
-export function detectCountry(nodeName: string, customPatterns?: CountryPatternRule[]): CountryInfo | null {
-  const patterns = customPatterns && customPatterns.length > 0 ? customPatterns : DEFAULT_COUNTRY_PATTERNS;
-  for (const item of patterns) {
-    try {
-      const cleanPattern = item.pattern.trim().replace(/^\(\?i\)/i, '').replace(/\(\?i\)/gi, '');
-      const reg = new RegExp(cleanPattern, 'i');
-      if (reg.test(nodeName)) {
-        return {
-          code: item.code,
-          name: item.name,
-          emoji: item.emoji,
-        };
-      }
-    } catch (e) {
-      if (nodeName.toLowerCase().includes(item.code.toLowerCase()) || nodeName.includes(item.name)) {
-        return {
-          code: item.code,
-          name: item.name,
-          emoji: item.emoji,
-        };
-      }
-    }
-  }
+export function detectCountry(_nodeName: string, _customPatterns?: CountryPatternRule[]): CountryInfo | null {
   return null;
 }

@@ -185,8 +185,6 @@ apiRouter.post('/api/custom-nodes', (req, res) => {
     type: req.body.type || 'vless',
     server: req.body.server || '',
     port: Number(req.body.port) || 443,
-    countryCode: req.body.countryCode || 'OTHER',
-    countryEmoji: req.body.countryEmoji || '🌐',
     ...req.body,
   };
   if (!newNode.detour) {

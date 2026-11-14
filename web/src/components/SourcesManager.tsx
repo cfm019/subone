@@ -279,7 +279,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
   // Bulk sort nodes with View Transition (per dynamic-sort guide)
   const handleQuickSortNodes = (
     source: SubscriptionSource,
-    mode: 'name-asc' | 'country' | 'reverse'
+    mode: 'name-asc' | 'reverse'
   ) => {
     const currentNodes = source.nodes || [];
     if (currentNodes.length <= 1) return;
@@ -289,13 +289,6 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
     if (mode === 'name-asc') {
       nextNodes.sort((a, b) => a.name.localeCompare(b.name, 'zh-CN', { numeric: true }));
       label = '按名称升序排列';
-    } else if (mode === 'country') {
-      nextNodes.sort(
-        (a, b) =>
-          (a.countryCode || 'ZZ').localeCompare(b.countryCode || 'ZZ') ||
-          a.name.localeCompare(b.name, 'zh-CN', { numeric: true })
-      );
-      label = '按地区归类排列';
     } else if (mode === 'reverse') {
       nextNodes.reverse();
       label = '已反转节点顺序';
@@ -1105,14 +1098,6 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                         <span className="text-[#9E9A91]">快捷排序:</span>
                         <button
                           type="button"
-                          onClick={() => handleQuickSortNodes(source, 'country')}
-                          className="px-2 py-0.5 rounded-md bg-[#FAF8F5] hover:bg-[#F0ECE4] text-[#59554E] hover:text-[#1F1E1D] border border-[#E8E4DC] transition-colors cursor-pointer font-medium"
-                          title="按国家/地区归类排序"
-                        >
-                          按地区
-                        </button>
-                        <button
-                          type="button"
                           onClick={() => handleQuickSortNodes(source, 'name-asc')}
                           className="px-2 py-0.5 rounded-md bg-[#FAF8F5] hover:bg-[#F0ECE4] text-[#59554E] hover:text-[#1F1E1D] border border-[#E8E4DC] transition-colors cursor-pointer font-medium"
                           title="按节点名称字母数字升序排列"
@@ -1158,7 +1143,7 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                             }}
                             className="node-item px-3 py-2 hover:bg-[#FAF8F5] transition-colors flex items-center justify-between gap-2.5 text-xs group/item"
                           >
-                            {/* 左侧：拖拽手柄、Emoji、节点名、协议类型、服务器端口 */}
+                            {/* 左侧：拖拽手柄、节点名、协议类型、服务器端口 */}
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               {nodesList.length > 1 && (
                                 <button
@@ -1179,7 +1164,6 @@ export const SourcesManager: React.FC<SourcesManagerProps> = ({
                                 </button>
                               )}
 
-                              <span className="text-sm shrink-0">{node.countryEmoji || '🌐'}</span>
                               <div className="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
                                 <span className="font-bold text-[#1F1E1D] truncate max-w-md">
                                   {node.name}

@@ -1352,7 +1352,6 @@ const ProfileEditModal: React.FC<ProfileEditModalProps> = ({
                               nodesList.map(n => (
                                 <div key={n.id} className="flex items-center justify-between text-[11px] py-0.5">
                                   <div className="flex items-center gap-1.5 truncate">
-                                    <span>{n.countryEmoji || '🌐'}</span>
                                     <span className="text-[#1F1E1D] truncate">{n.name}</span>
                                   </div>
                                   <span className="text-[10px] font-mono text-[#8C877D] shrink-0 ml-2">
